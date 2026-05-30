@@ -5,3 +5,8 @@ node_modules/
 dist/
 .env
 *.db
+
+# modules: only the bundled `users` module ships with thrive_base.
+# Everything else (vehicles, budget, vault, ...) is installed separately.
+modules/*
+!modules/users/

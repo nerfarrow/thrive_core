@@ -5,9 +5,11 @@ services:
     restart: unless-stopped
     volumes:
       - ./data:/data
+      - ./modules:/app/modules   # modules mounted live — no rebuild needed
     environment:
       - DB_FILE=/data/thrivebase.db
-      - COOKIE_SECURE=true
+      - MODULES_DIR=/app/modules
+      - COOKIE_SECURE=false   # http dev on :9500 — Secure cookies get dropped over http
       - SESSION_DAYS=30
     networks:
       - internal

@@ -63,6 +63,9 @@ entire point of the machine. But thrive_base itself runs on any Linux box via Do
   "requires": []
 }
 ```
+Optional `"core": true` marks a module as required by the platform — the API
+refuses to disable it and the Settings UI shows a 🔒 lock instead of a toggle.
+Only `users` is core.
 
 ### Installing a module
 ```bash
@@ -71,14 +74,17 @@ git clone git@github.com:nerfarrow/thrive_vehicles.git vehicles
 docker compose restart api   # no rebuild needed
 ```
 
-### Installed modules
+### Bundled module
+thrive_base ships with exactly one module: `users`. It's the only module tracked
+in this repo (`.gitignore` ignores `modules/*` except `modules/users/`). Everything
+else — vehicles, budget, vault — is a separate repo you install into `modules/`.
 - `modules/users/` — user management (admin Users page, roles, disable/enable)
-- `modules/vehicles/` — garage + MPG tracking
 
 ### DB table ownership
 - `thrive_base` owns: `users`, `sessions`, `modules`
 - `users` module owns: (currently uses base users table, may add user_preferences later)
-- `vehicles` module owns: `vehicles`, `oil_changes`, `tires`, `mpg_entries`
+- installed modules own their own tables (e.g. a vehicles module would own
+  `vehicles`, `oil_changes`, `tires`, `mpg_entries`)
 
 ## Auth Flow
 - `GET /auth/status` — public, returns `{setup_needed: bool}`
@@ -94,11 +100,10 @@ thrive_base/
 ├── CLAUDE.md               ← you are here
 ├── docker-compose.yml
 ├── data/                   ← gitignored, holds thrivebase.db
-├── modules/                ← gitignored contents, modules cloned here
-│   ├── users/
-│   │   └── module.json
-│   └── vehicles/
-│       └── module.json
+├── modules/                ← only users/ is tracked; other modules cloned here
+│   └── users/              ← bundled default module
+│       ├── module.json
+│       └── api/routers/users.py   ← admin user management endpoints
 ├── api/
 │   ├── Dockerfile
 │   ├── main.py             ← auth gate + module bootstrap + /modules API
@@ -132,12 +137,12 @@ thrive_base/
 - [x] Landing page (dynamic module cards)
 - [x] Settings page (account, user management, module enable/disable)
 - [x] Show/hide password on login screen
-- [x] Module manifests for users and vehicles (module.json only, no routers yet)
+- [x] Bundled `users` module with admin user management API (modules/users/api/routers/users.py)
+- [x] COOKIE_SECURE=false for local http dev
 
 ## What's next
-- [ ] Fix COOKIE_SECURE=false for local dev (currently set to true, breaks http)
-- [ ] Build users module API routers (api/routers/users.py in modules/users/)
-- [ ] Build vehicles module API routers (api/routers/vehicles.py, mpg.py in modules/vehicles/)
+- [ ] Wire SettingsPage to the users module `/users` endpoints (still uses base `/auth/users`)
+- [ ] UI "install module" flow (currently install = clone into modules/ + restart api)
 - [ ] Wire module nav icons into top bar dynamically (read from GET /modules)
 - [ ] Module UI pages (each module brings its own React pages)
 - [ ] thrive_budget module (port from thrive monolith)

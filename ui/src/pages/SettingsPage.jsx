@@ -19,6 +19,62 @@ function Badge({ kind }) {
   return <span style={{ fontSize: 9, padding: '2px 8px', borderRadius: 4, background: s.bg, color: s.c, fontFamily: 'monospace', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{kind}</span>
 }
 
+function ModulesSection() {
+  const [modules,  setModules]  = useState([])
+  const [saving,   setSaving]   = useState(null)
+
+  useEffect(() => {
+    api.get('/modules').then(setModules).catch(() => {})
+  }, [])
+
+  const toggle = async (m) => {
+    setSaving(m.id)
+    try {
+      await api.patch(`/modules/${m.id}`, { enabled: !m.enabled })
+      setModules(prev => prev.map(x => x.id === m.id ? { ...x, enabled: !x.enabled } : x))
+    } catch {}
+    finally { setSaving(null) }
+  }
+
+  if (modules.length === 0) return (
+    <div style={{ ...body, fontSize: 12, color: 'var(--text-tertiary,#666)', lineHeight: 1.8 }}>
+      No modules installed. Clone a module into <code style={{ fontFamily: 'monospace', fontSize: 11 }}>modules/</code> and restart the API.
+    </div>
+  )
+
+  return (
+    <div>
+      {modules.map((m, i) => (
+        <div key={m.id} style={{ padding: '12px 16px', borderTop: i === 0 ? 'none' : '1px solid var(--border-color,#2a2a2a)', display: 'flex', alignItems: 'center', gap: 12 }}>
+          <span style={{ fontSize: 20 }}>{m.icon || '📦'}</span>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 13, fontWeight: 500 }}>{m.name} <span style={{ fontSize: 10, color: 'var(--text-tertiary,#666)', fontFamily: 'monospace' }}>v{m.version}</span></div>
+            <div style={{ fontSize: 11, color: 'var(--text-tertiary,#888)', marginTop: 2 }}>{m.description}</div>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+            {m.core ? (
+              <span title="Required by the platform — can't be disabled" style={{ fontSize: 10, color: 'var(--text-tertiary,#666)', fontFamily: 'monospace', textTransform: 'uppercase', letterSpacing: '0.08em' }}>🔒 core</span>
+            ) : (
+              <>
+                {!m.enabled && <span style={{ fontSize: 10, color: 'var(--text-tertiary,#666)', fontFamily: 'monospace' }}>disabled</span>}
+                <button
+                  onClick={() => toggle(m)}
+                  disabled={saving === m.id}
+                  style={{ ...btnS, padding: '4px 12px', fontSize: 10, opacity: saving === m.id ? 0.5 : 1, color: m.enabled ? 'var(--color-danger,#ef4444)' : 'var(--color-success,#22c55e)', borderColor: m.enabled ? 'var(--color-danger,#ef4444)' : 'var(--color-success,#22c55e)' }}>
+                  {saving === m.id ? '…' : m.enabled ? 'Disable' : 'Enable'}
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      ))}
+      <div style={{ padding: '10px 16px', fontSize: 10, color: 'var(--text-tertiary,#555)', lineHeight: 1.6, borderTop: '1px solid var(--border-color,#2a2a2a)' }}>
+        Changes take effect after API restart. Install new modules by cloning into <code style={{ fontFamily: 'monospace' }}>modules/</code>.
+      </div>
+    </div>
+  )
+}
+
 export default function SettingsPage() {
   const { user, logout } = useAuth()
   const [users,   setUsers]   = useState([])
@@ -130,12 +186,10 @@ export default function SettingsPage() {
         </div>
       )}
 
-      {/* Modules placeholder */}
+      {/* Modules */}
       <div style={card}>
         <div style={head}>Modules</div>
-        <div style={{ ...body, color: 'var(--text-tertiary,#666)', fontSize: 12, lineHeight: 1.8 }}>
-          No modules available yet. Modules extend thrive with additional features — budget, vault, documents, and more.
-        </div>
+        <ModulesSection />
       </div>
     </div>
   )
