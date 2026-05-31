@@ -19,6 +19,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         ca-certificates \
         apt-utils \
         qemu-system-x86 \
+        qemu-utils \
         ovmf \
         git \
     && rm -rf /var/lib/apt/lists/*

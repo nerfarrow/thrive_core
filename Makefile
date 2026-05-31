@@ -19,6 +19,14 @@ image: builder          ## produce thriveos*.raw
 vm: builder             ## boot the built image in QEMU
 	docker run --rm -it --privileged $(KVM) -v $$PWD:/work -w /work $(BUILDER) vm
 
+vmdk: builder           ## thriveos.raw -> thriveos.vmdk (VirtualBox/VMware/Proxmox; sparse)
+	docker run --rm -v $$PWD:/work -w /work --entrypoint qemu-img $(BUILDER) \
+		convert -f raw -O vmdk -o subformat=monolithicSparse thriveos.raw thriveos.vmdk
+
+vdi: builder            ## thriveos.raw -> thriveos.vdi (VirtualBox native; sparse)
+	docker run --rm -v $$PWD:/work -w /work --entrypoint qemu-img $(BUILDER) \
+		convert -f raw -O vdi thriveos.raw thriveos.vdi
+
 shell: builder          ## drop into the build-container for debugging
 	docker run --rm -it --privileged $(KVM) -v $$PWD:/work -w /work --entrypoint /bin/bash $(BUILDER)
 
