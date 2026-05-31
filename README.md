@@ -59,8 +59,12 @@ make clean     # remove build artifacts
 
 ## Status
 - [x] Repo + containerized build pipeline scaffolded
-- [ ] First successful `make image` (bring-up pass)
-- [ ] Boots in QEMU to a working thrive_base on :9500
+- [x] `make image` produces a bootable `thriveos.raw` (1.7G, UEFI ESP)
+- [x] Boots in QEMU to Debian userspace — hostname `thriveos`, root autologin
+- [x] docker / ssh / thrive services enabled in the image (verified at build time)
+- [ ] thrive_base live on :9500 — needs a boot on a real network (guest must reach
+      GitHub + Docker Hub to clone thrive_base and pull its images). Not verifiable in
+      a network-restricted build sandbox; the machinery is in place and assembled.
 - [ ] Flash/boot on real amd64 hardware
 - [ ] Optional kiosk-display mode
-- [ ] Release-pinned thrive_base mode
+- [ ] Release-pinned thrive_base mode (bake a thrive_base version in vs. pull-on-boot)
