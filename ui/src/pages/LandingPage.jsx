@@ -14,10 +14,14 @@ export default function LandingPage() {
   const [hov,     setHov]     = useState(null)
 
   useEffect(() => {
-    api.get('/modules').then(setModules).catch(() => {})
+    const fetchModules = () => api.get('/modules').then(setModules).catch(() => {})
+    fetchModules()
+    window.addEventListener('thrivebase:modules-changed', fetchModules)
+    return () => window.removeEventListener('thrivebase:modules-changed', fetchModules)
   }, [])
 
-  const enabled = modules.filter(m => m.enabled)
+  // core modules (e.g. users) live in the top bar, not as feature tiles here
+  const enabled = modules.filter(m => m.enabled && !m.core)
 
   return (
     <div style={{ maxWidth: 900, margin: '0 auto', padding: '3rem 2rem' }}>

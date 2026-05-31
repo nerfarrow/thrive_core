@@ -2,12 +2,14 @@
 // App.jsx — thrive_base shell
 // Minimal: auth gate, top nav, landing, settings
 // =============================================================================
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './context/AuthContext'
+import { api } from './api'
 import LoginPage   from './components/LoginPage'
 import LandingPage from './pages/LandingPage'
 import SettingsPage from './pages/SettingsPage'
+import UsersPage   from './pages/UsersPage'
 
 // ── top nav ───────────────────────────────────────────────────────────────────
 function TopNav() {
@@ -15,6 +17,16 @@ function TopNav() {
   const navigate  = useNavigate()
   const location  = useLocation()
   const [hov, setHov] = useState(null)
+  const [modules, setModules] = useState([])
+
+  useEffect(() => {
+    if (!user) { setModules([]); return }
+    const fetchModules = () => api.get('/modules').then(setModules).catch(() => {})
+    fetchModules()
+    window.addEventListener('thrivebase:modules-changed', fetchModules)
+    return () => window.removeEventListener('thrivebase:modules-changed', fetchModules)
+  }, [user])
+  const navModules = modules.filter(m => m.enabled && m.nav_path)
 
   const path = location.pathname
   const iconBtn = (id) => ({
@@ -34,7 +46,15 @@ function TopNav() {
       </button>
       <div style={{ width: 1, height: 20, background: 'var(--border-color,#333)', marginRight: 6 }} />
 
-      {/* module icons appear here as modules are installed */}
+      {/* module icons — rendered dynamically from enabled modules */}
+      {navModules.map(m => (
+        <button key={m.id} onClick={() => navigate(m.nav_path)} title={m.name}
+          style={iconBtn(m.id)}
+          onMouseEnter={() => setHov(m.id)}
+          onMouseLeave={() => setHov(null)}>
+          {m.icon || '📦'}
+        </button>
+      ))}
 
       <div style={{ flex: 1 }} />
       <button onClick={() => navigate('/settings')} title="Settings"
@@ -55,6 +75,7 @@ function Shell() {
       <main style={{ marginTop: 48, minHeight: 'calc(100vh - 48px)' }}>
         <Routes>
           <Route path="/"         element={<LandingPage />} />
+          <Route path="/users"    element={<UsersPage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="*"         element={<Navigate to="/" replace />} />
         </Routes>
