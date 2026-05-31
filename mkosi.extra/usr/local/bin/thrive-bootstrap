@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+# First-boot (and every-boot) bootstrap: ensure thrive_base is present + up to date,
+# and that a working `docker compose` exists. Idempotent.
+set -euo pipefail
+
+REPO="${THRIVE_REPO:-https://github.com/nerfarrow/thrive_base.git}"
+BRANCH="${THRIVE_BRANCH:-main}"
+DEST="${THRIVE_DIR:-/opt/thrive_base}"
+
+# 1) ensure thrive_base source is present and current
+if [ ! -d "$DEST/.git" ]; then
+    echo "[thrive-bootstrap] cloning $REPO -> $DEST"
+    git clone --branch "$BRANCH" "$REPO" "$DEST"
+else
+    echo "[thrive-bootstrap] updating $DEST"
+    git -C "$DEST" fetch --depth=1 origin "$BRANCH" && git -C "$DEST" reset --hard "origin/$BRANCH"
+fi
+
+# 2) ensure `docker compose` (v2) works; install the plugin as a fallback if the
+#    distro package wasn't available at image-build time
+if ! docker compose version >/dev/null 2>&1; then
+    echo "[thrive-bootstrap] docker compose plugin missing — installing fallback"
+    arch="$(uname -m)"; case "$arch" in x86_64) arch=x86_64;; aarch64) arch=aarch64;; esac
+    mkdir -p /usr/local/lib/docker/cli-plugins
+    curl -fsSL "https://github.com/docker/compose/releases/latest/download/docker-compose-linux-${arch}" \
+        -o /usr/local/lib/docker/cli-plugins/docker-compose
+    chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
+fi
+
+# 3) data/ and modules/ live on the appliance and persist across thrive_base updates
+mkdir -p "$DEST/data" "$DEST/modules"
+
+echo "[thrive-bootstrap] ready"

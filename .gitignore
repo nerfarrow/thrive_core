@@ -1,0 +1,10 @@
+# mkosi / build artifacts
+*.raw
+*.qcow2
+*.img
+output/
+mkosi.output/
+mkosi.cache/
+mkosi.builddir/
+.mkosi-*
+*.efi

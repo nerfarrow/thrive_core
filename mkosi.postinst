@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+# Runs inside the image after packages are installed. Enables the appliance services.
+set -euo pipefail
+
+# our bootstrap must be executable (mkosi.extra preserves mode, but be defensive)
+chmod 0755 /usr/local/bin/thrive-bootstrap
+
+# enable core services so the box comes up as a thrive server on first boot
+systemctl enable docker.service || true
+systemctl enable ssh.service || true
+systemctl enable systemd-networkd.service systemd-resolved.service || true
+systemctl enable NetworkManager.service || true
+systemctl enable thrive.service
+
+echo "thriveos" > /etc/hostname
