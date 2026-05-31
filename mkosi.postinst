@@ -1,15 +1,29 @@
 #!/usr/bin/env bash
-# Runs inside the image after packages are installed. Enables the appliance services.
+# Runs ON THE HOST with $BUILDROOT pointing at the image root (mkosi does not
+# chroot scripts). So we touch the image only via $BUILDROOT, and enable services
+# by writing wants-symlinks directly rather than calling systemctl.
 set -euo pipefail
 
-# our bootstrap must be executable (mkosi.extra preserves mode, but be defensive)
-chmod 0755 /usr/local/bin/thrive-bootstrap
+R="$BUILDROOT"
+wants="$R/etc/systemd/system/multi-user.target.wants"
+mkdir -p "$wants"
 
-# enable core services so the box comes up as a thrive server on first boot
-systemctl enable docker.service || true
-systemctl enable ssh.service || true
-systemctl enable systemd-networkd.service systemd-resolved.service || true
-systemctl enable NetworkManager.service || true
-systemctl enable thrive.service
+# enable a unit by symlinking it into multi-user.target.wants, locating the unit
+# wherever the distro actually ships it.
+enable_unit() {
+    local unit="$1" src=""
+    for d in /usr/lib/systemd/system /lib/systemd/system /etc/systemd/system; do
+        if [ -e "$R$d/$unit" ]; then src="$d/$unit"; break; fi
+    done
+    if [ -n "$src" ]; then
+        ln -sf "$src" "$wants/$unit"
+        echo "[postinst] enabled $unit -> $src"
+    else
+        echo "[postinst] WARN: $unit not found in image"
+    fi
+}
 
-echo "thriveos" > /etc/hostname
+enable_unit docker.service     # container engine
+enable_unit ssh.service        # remote admin
+enable_unit thrive.service     # the appliance: pulls + runs thrive_base
+# NetworkManager is enabled by its own package install.
