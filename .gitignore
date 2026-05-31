@@ -2,9 +2,14 @@
 *.raw
 *.qcow2
 *.img
+*.initrd
+*.vmlinuz
 output/
 mkosi.output/
 mkosi.cache/
 mkosi.builddir/
 .mkosi-*
 *.efi
+
+# mkosi "latest" output symlink (-> thriveos.raw)
+/thriveos
