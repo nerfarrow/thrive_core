@@ -6,7 +6,6 @@
   "version": "0.1.0",
   "color": "#a855f7",
   "nav_path": "/users",
-  "core": true,
   "api_routers": ["api.routers.users"],
   "requires": []
 }

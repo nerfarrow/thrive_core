@@ -20,6 +20,12 @@ router = APIRouter(prefix="/users", tags=["users"])
 
 
 # ── schemas ──────────────────────────────────────────────────────────────────
+class CreateBody(BaseModel):
+    username: str
+    password: str
+    email:    Optional[str] = None
+    role:     Optional[str] = None
+
 class RoleBody(BaseModel):
     role: str
 
@@ -50,6 +56,27 @@ def list_users(request: Request):
         return [dict(r) for r in conn.execute(
             "SELECT id, username, email, role, disabled, created_at FROM users ORDER BY id"
         ).fetchall()]
+    finally:
+        conn.close()
+
+@router.post("", status_code=201)
+def create_user(body: CreateBody, request: Request):
+    _require_admin(request)
+    if not body.username or not body.password:
+        raise HTTPException(status_code=400, detail="Username and password required")
+    if len(body.password) < 8:
+        raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
+    role = body.role if body.role in ("admin", "member") else "member"
+    conn = get_db()
+    try:
+        if conn.execute("SELECT id FROM users WHERE username=?", (body.username,)).fetchone():
+            raise HTTPException(status_code=409, detail="Username already taken")
+        cur = conn.execute(
+            "INSERT INTO users (username, email, password_hash, role) VALUES (?,?,?,?)",
+            (body.username, body.email, hash_password(body.password), role)
+        )
+        conn.commit()
+        return dict(conn.execute("SELECT id, username, email, role FROM users WHERE id=?", (cur.lastrowid,)).fetchone())
     finally:
         conn.close()
 

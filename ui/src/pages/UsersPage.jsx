@@ -31,7 +31,7 @@ export default function UsersPage() {
 
   const load = useCallback(async () => {
     if (user?.role !== 'admin') return
-    try { setUsers(await api.get('/auth/users')) } catch (e) { setErr(e.message) }
+    try { setUsers(await api.get('/users')) } catch (e) { setErr(e.message) }
   }, [user])
   useEffect(() => { load() }, [load])
 
@@ -39,14 +39,14 @@ export default function UsersPage() {
     if (!nu.username || !nu.password) { setErr('Username and password required'); return }
     if (nu.password.length < 8) { setErr('Password must be at least 8 characters'); return }
     setSaving(true); setErr(null)
-    try { await api.post('/auth/register', nu); setNu({ username: '', password: '', role: 'member' }); setAdding(false); load() }
+    try { await api.post('/users', nu); setNu({ username: '', password: '', role: 'member' }); setAdding(false); load() }
     catch (e) { setErr(e.message) }
     finally { setSaving(false) }
   }
-  const changeRole    = async (id, role)     => { try { await api.patch(`/auth/users/${id}/role`,     { role });     load() } catch (e) { setErr(e.message) } }
-  const toggleDisable = async (id, disabled) => { try { await api.patch(`/auth/users/${id}/disabled`, { disabled }); load() } catch (e) { setErr(e.message) } }
-  const doReset       = async (id)           => { const pw = resetPw[id] || ''; if (pw.length < 8) { setErr('Min 8 chars'); return }; try { await api.patch(`/auth/users/${id}/password`, { password: pw }); setResetPw(p => ({ ...p, [id]: '' })); setRow(id, { resetting: false }) } catch (e) { setErr(e.message) } }
-  const doDelete      = async (id)           => { try { await api.del(`/auth/users/${id}`); load() } catch (e) { setErr(e.message) } }
+  const changeRole    = async (id, role)     => { try { await api.patch(`/users/${id}/role`,     { role });     load() } catch (e) { setErr(e.message) } }
+  const toggleDisable = async (id, disabled) => { try { await api.patch(`/users/${id}/disabled`, { disabled }); load() } catch (e) { setErr(e.message) } }
+  const doReset       = async (id)           => { const pw = resetPw[id] || ''; if (pw.length < 8) { setErr('Min 8 chars'); return }; try { await api.patch(`/users/${id}/password`, { password: pw }); setResetPw(p => ({ ...p, [id]: '' })); setRow(id, { resetting: false }) } catch (e) { setErr(e.message) } }
+  const doDelete      = async (id)           => { try { await api.del(`/users/${id}`); load() } catch (e) { setErr(e.message) } }
 
   return (
     <div style={{ maxWidth: 700, margin: '0 auto', padding: '1.5rem 1.5rem 3rem' }}>
