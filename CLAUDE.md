@@ -65,7 +65,8 @@ entire point of the machine. But thrive_core itself runs on any Linux box via Do
 ```
 Optional `"core": true` marks a module as required by the platform — the API
 refuses to disable it and the Settings UI shows a 🔒 lock instead of a toggle.
-Only `users` is core.
+No module is currently core. The mechanism exists for any future module the
+platform genuinely can't run without.
 
 ### Installing a module
 ```bash
@@ -75,10 +76,18 @@ docker compose restart api   # no rebuild needed
 ```
 
 ### Bundled module
-thrive_core ships with exactly one module: `users`. It's the only module tracked
-in this repo (`.gitignore` ignores `modules/*` except `modules/users/`). Everything
+thrive_core bundles one module: `users`. It's the only module tracked in this
+repo (`.gitignore` ignores `modules/*` except `modules/users/`). Everything
 else — vehicles, budget, vault — is a separate repo you install into `modules/`.
-- `modules/users/` — user management (admin Users page, roles, disable/enable)
+- `modules/users/` — multi-user management (admin Users page, roles, add/disable/delete)
+
+`users` is a normal, optional module (not core) — it can be toggled in
+Settings → Modules and shows as a landing tile. The split is deliberate:
+**auth** (login/session/`/me`/first-run owner bootstrap) lives in core
+(`routers/auth.py`); the **users module** owns all multi-user management under
+`/users`. A single-user install can run without it. It's bundled today only
+because modules can't yet ship their own React pages — once they can, it can
+move to its own `thrive_users` repo.
 
 ### DB table ownership
 - `thrive_core` owns: `users`, `sessions`, `modules`
@@ -88,8 +97,9 @@ else — vehicles, budget, vault — is a separate repo you install into `module
 
 ## Auth Flow
 - `GET /auth/status` — public, returns `{setup_needed: bool}`
-- First user to register becomes admin automatically
-- After first user, only admins can register new users via `POST /auth/register`
+- `POST /auth/register` is first-run owner bootstrap only — first user becomes
+  admin; once an owner exists it returns 403
+- Additional users are created via the users module: `POST /users` (admin only)
 - Session cookie set on login, cleared on logout
 - Auth gate middleware in `main.py` blocks all routes except PUBLIC_PATHS
 - PUBLIC_PATHS: `/health`, `/auth/status`, `/auth/login`, `/auth/logout`, `/auth/register`
@@ -110,7 +120,7 @@ thrive_core/
 │   ├── modules.py          ← module discovery, loader, registry
 │   ├── requirements.txt
 │   └── routers/
-│       └── auth.py         ← users, sessions, admin user management
+│       └── auth.py         ← auth only: login/session/me/first-run register
 └── ui/
     ├── Dockerfile
     ├── index.html
@@ -128,7 +138,8 @@ thrive_core/
         │   └── LoginPage.jsx   ← login + first-run setup + show/hide password
         └── pages/
             ├── LandingPage.jsx  ← dynamic module cards from GET /modules
-            └── SettingsPage.jsx ← account, users (admin), modules enable/disable
+            ├── SettingsPage.jsx ← account, modules enable/disable
+            └── UsersPage.jsx    ← users module page (admin mgmt, calls /users*)
 ```
 
 ## What's been built
@@ -138,13 +149,15 @@ thrive_core/
 - [x] Settings page (account, user management, module enable/disable)
 - [x] Show/hide password on login screen
 - [x] Bundled `users` module with admin user management API (modules/users/api/routers/users.py)
+- [x] Split auth (core) from user management (users module); `users` is no longer core
+- [x] UsersPage + dynamic module nav icons in top bar (from GET /modules)
 - [x] COOKIE_SECURE=false for local http dev
 
 ## What's next
-- [ ] Wire SettingsPage to the users module `/users` endpoints (still uses base `/auth/users`)
 - [ ] UI "install module" flow (currently install = clone into modules/ + restart api)
-- [ ] Wire module nav icons into top bar dynamically (read from GET /modules)
-- [ ] Module UI pages (each module brings its own React pages)
+- [ ] Module UI pages (each module brings its own React pages) — prereq for
+      splitting `users` out into its own `thrive_users` repo
+- [ ] Install-time module selection (choose which modules enabled on setup)
 - [ ] thrive_budget module (port from thrive monolith)
 - [ ] thrive_vault module (Vaultwarden client built in)
 
