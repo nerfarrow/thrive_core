@@ -79,27 +79,35 @@ docker compose restart api   # no rebuild needed
 thrive_core bundles one module: `users`. It's the only module tracked in this
 repo (`.gitignore` ignores `modules/*` except `modules/users/`). Everything
 else — vehicles, budget, vault — is a separate repo you install into `modules/`.
-- `modules/users/` — multi-user management (admin Users page, roles, add/disable/delete)
+- `modules/users/` — **household profiles** (the people in the home): add/edit/
+  delete profiles with name + avatar + color. A profile is a *person*, not a login.
 
-`users` is a normal, optional module (not core) — it can be toggled in
-Settings → Modules and shows as a landing tile. The split is deliberate:
-**auth** (login/session/`/me`/first-run owner bootstrap) lives in core
-(`routers/auth.py`); the **users module** owns all multi-user management under
-`/users`. A single-user install can run without it. It's bundled today only
-because modules can't yet ship their own React pages — once they can, it can
-move to its own `thrive_users` repo.
+**Account vs user/profile** — the platform deliberately separates the two:
+- An **account** (`accounts` table) is a login credential (username/password/role).
+  Accounts are core/auth-level and managed in **Settings → Accounts** (admin only).
+- A **user** (`users` table) is a household profile/person. Managed by the `users`
+  module under `/users`. A profile can exist with **no account** (shared/kiosk).
+- An account links to one profile via `accounts.user_id`; signing in drops you into
+  that profile. `/auth/me` returns the account fields plus `profile: {…} | null`.
+
+`users` is a normal, optional module (not core) — toggled in Settings → Modules,
+shown as a landing tile. **Auth** (login/session/`/me`/first-run bootstrap +
+`accounts` management via `routers/accounts.py`) lives in core; the **users
+module** owns only profiles. It's bundled today only because modules can't yet
+ship their own React pages — once they can, it can move to its own `thrive_users` repo.
 
 ### DB table ownership
-- `thrive_core` owns: `users`, `sessions`, `modules`
-- `users` module owns: (currently uses base users table, may add user_preferences later)
+- `thrive_core` owns: `accounts` (login creds), `users` (profiles), `sessions`, `modules`
+- `users` module: reads/writes the core `users` (profiles) table
 - installed modules own their own tables (e.g. a vehicles module would own
   `vehicles`, `oil_changes`, `tires`, `mpg_entries`)
 
 ## Auth Flow
 - `GET /auth/status` — public, returns `{setup_needed: bool}`
-- `POST /auth/register` is first-run owner bootstrap only — first user becomes
-  admin; once an owner exists it returns 403
-- Additional users are created via the users module: `POST /users` (admin only)
+- `POST /auth/register` is first-run owner bootstrap only — creates the first
+  admin **account** plus a matching **profile** and links them; returns 403 after
+- Additional accounts are created in Settings → Accounts: `POST /accounts` (admin)
+- Profiles (people) are created via the users module: `POST /users` (admin only)
 - Session cookie set on login, cleared on logout
 - Auth gate middleware in `main.py` blocks all routes except PUBLIC_PATHS
 - PUBLIC_PATHS: `/health`, `/auth/status`, `/auth/login`, `/auth/logout`, `/auth/register`
@@ -113,14 +121,15 @@ thrive_core/
 ├── modules/                ← only users/ is tracked; other modules cloned here
 │   └── users/              ← bundled default module
 │       ├── module.json
-│       └── api/routers/users.py   ← admin user management endpoints
+│       └── api/routers/users.py   ← household profile CRUD (people, not logins)
 ├── api/
 │   ├── Dockerfile
 │   ├── main.py             ← auth gate + module bootstrap + /modules API
 │   ├── modules.py          ← module discovery, loader, registry
 │   ├── requirements.txt
 │   └── routers/
-│       └── auth.py         ← auth only: login/session/me/first-run register
+│       ├── auth.py         ← auth: login/session/me/first-run + schema & migration
+│       └── accounts.py     ← admin account mgmt (creds, roles, link account→profile)
 └── ui/
     ├── Dockerfile
     ├── index.html
@@ -138,8 +147,8 @@ thrive_core/
         │   └── LoginPage.jsx   ← login + first-run setup + show/hide password
         └── pages/
             ├── LandingPage.jsx  ← dynamic module cards from GET /modules
-            ├── SettingsPage.jsx ← account, modules enable/disable
-            └── UsersPage.jsx    ← users module page (admin mgmt, calls /users*)
+            ├── SettingsPage.jsx ← signed-in profile, Accounts (admin), modules
+            └── UsersPage.jsx    ← users module page: household profiles (calls /users*)
 ```
 
 ## What's been built
@@ -152,6 +161,9 @@ thrive_core/
 - [x] Split auth (core) from user management (users module); `users` is no longer core
 - [x] UsersPage + dynamic module nav icons in top bar (from GET /modules)
 - [x] COOKIE_SECURE=false for local http dev
+- [x] Modules: discovered ≠ installed — auto-discovery, but install is opt-in in Settings
+- [x] Split **account** (login cred, core/Settings) from **user/profile** (people, users
+      module); `accounts.user_id` links an account to a profile; `users` module = profiles
 
 ## What's next
 - [ ] UI "install module" flow (currently install = clone into modules/ + restart api)

@@ -28,15 +28,21 @@ def init_modules_table():
                 version      TEXT,
                 color        TEXT,
                 nav_path     TEXT,
-                enabled      INTEGER DEFAULT 1,
+                enabled      INTEGER DEFAULT 0,
+                installed    INTEGER DEFAULT 0,
                 core         INTEGER DEFAULT 0,
                 installed_at TEXT DEFAULT (datetime('now'))
             )
         """)
-        # migration: add `core` to pre-existing tables
         cols = [r["name"] for r in conn.execute("PRAGMA table_info(modules)").fetchall()]
+        # migration: add `core` to pre-existing tables
         if "core" not in cols:
             conn.execute("ALTER TABLE modules ADD COLUMN core INTEGER DEFAULT 0")
+        # migration: add `installed` — preserve currently-live modules across the
+        # upgrade so a running install isn't silently torn down.
+        if "installed" not in cols:
+            conn.execute("ALTER TABLE modules ADD COLUMN installed INTEGER DEFAULT 0")
+            conn.execute("UPDATE modules SET installed=1 WHERE enabled=1")
         conn.commit()
     finally:
         conn.close()
@@ -77,8 +83,10 @@ def sync_registry(discovered: list[dict]):
                      m.get("version"), m.get("color"), m.get("nav_path"), core, m["id"])
                 )
             else:
+                # newly discovered modules are registered but NOT installed —
+                # the user opts in via Settings → Modules.
                 conn.execute(
-                    "INSERT INTO modules (id, name, icon, description, version, color, nav_path, enabled, core) VALUES (?,?,?,?,?,?,?,1,?)",
+                    "INSERT INTO modules (id, name, icon, description, version, color, nav_path, enabled, installed, core) VALUES (?,?,?,?,?,?,?,0,0,?)",
                     (m["id"], m.get("name"), m.get("icon"), m.get("description"),
                      m.get("version"), m.get("color"), m.get("nav_path"), core)
                 )
@@ -87,21 +95,22 @@ def sync_registry(discovered: list[dict]):
         conn.close()
 
 
-def get_enabled_ids() -> set[str]:
+def get_active_ids() -> set[str]:
+    """Modules that should actually run: installed AND enabled."""
     conn = get_db()
     try:
-        rows = conn.execute("SELECT id FROM modules WHERE enabled=1").fetchall()
+        rows = conn.execute("SELECT id FROM modules WHERE installed=1 AND enabled=1").fetchall()
         return {r["id"] for r in rows}
     finally:
         conn.close()
 
 
 # ── router loading ────────────────────────────────────────────────────────────
-def load_module_routers(app: FastAPI, discovered: list[dict], enabled_ids: set[str]):
-    """Dynamically import and register each enabled module's API routers."""
+def load_module_routers(app: FastAPI, discovered: list[dict], active_ids: set[str]):
+    """Dynamically import and register each active module's API routers."""
     for m in discovered:
-        if m["id"] not in enabled_ids:
-            print(f"[modules] {m['id']} disabled — skipping")
+        if m["id"] not in active_ids:
+            print(f"[modules] {m['id']} not active — skipping")
             continue
         module_path = Path(m["_path"])
         api_path    = module_path / "api"
@@ -152,6 +161,20 @@ def set_module_enabled(module_id: str, enabled: bool) -> bool:
     finally:
         conn.close()
 
+def set_module_installed(module_id: str, installed: bool) -> bool:
+    """Install (installed=1, enabled=1) or uninstall (installed=0, enabled=0)
+    a module. Routers load/unload on the next API restart."""
+    conn = get_db()
+    try:
+        if not conn.execute("SELECT id FROM modules WHERE id=?", (module_id,)).fetchone():
+            return False
+        flag = 1 if installed else 0
+        conn.execute("UPDATE modules SET installed=?, enabled=? WHERE id=?", (flag, flag, module_id))
+        conn.commit()
+        return True
+    finally:
+        conn.close()
+
 
 # ── bootstrap ─────────────────────────────────────────────────────────────────
 def bootstrap(app: FastAPI):
@@ -159,6 +182,6 @@ def bootstrap(app: FastAPI):
     init_modules_table()
     discovered = discover_modules()
     sync_registry(discovered)
-    enabled    = get_enabled_ids()
-    load_module_routers(app, discovered, enabled)
-    print(f"[modules] {len(discovered)} discovered, {len(enabled)} enabled")
+    active     = get_active_ids()
+    load_module_routers(app, discovered, active)
+    print(f"[modules] {len(discovered)} discovered, {len(active)} active")

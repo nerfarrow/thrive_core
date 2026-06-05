@@ -20,14 +20,14 @@ export default function LandingPage() {
     return () => window.removeEventListener('thrivecore:modules-changed', fetchModules)
   }, [])
 
-  // core modules (e.g. users) live in the top bar, not as feature tiles here
-  const enabled = modules.filter(m => m.enabled && !m.core)
+  // only active (installed + enabled) modules become feature tiles
+  const enabled = modules.filter(m => m.installed && m.enabled && !m.core)
 
   return (
     <div style={{ maxWidth: 900, margin: '0 auto', padding: '3rem 2rem' }}>
       <div style={{ marginBottom: '3rem' }}>
         <div style={{ fontFamily: 'var(--font-mono,monospace)', fontSize: 28, fontWeight: 700, letterSpacing: '0.06em' }}>thrive</div>
-        <div style={{ fontSize: 13, color: 'var(--text-tertiary,#666)', marginTop: 6 }}>Welcome back, {user?.username}</div>
+        <div style={{ fontSize: 13, color: 'var(--text-tertiary,#666)', marginTop: 6 }}>Welcome back, {user?.profile?.name || user?.username}</div>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 16 }}>

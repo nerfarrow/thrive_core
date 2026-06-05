@@ -26,7 +26,7 @@ function TopNav() {
     window.addEventListener('thrivecore:modules-changed', fetchModules)
     return () => window.removeEventListener('thrivecore:modules-changed', fetchModules)
   }, [user])
-  const navModules = modules.filter(m => m.enabled && m.nav_path)
+  const navModules = modules.filter(m => m.installed && m.enabled && m.nav_path)
 
   const path = location.pathname
   const iconBtn = (id) => ({
