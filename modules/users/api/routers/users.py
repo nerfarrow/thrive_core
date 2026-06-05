@@ -1,6 +1,6 @@
 # =============================================================================
 # routers/users.py — Users module: admin user management
-# thrive_base module `users`
+# thrive_core module `users`
 #
 # The base platform (routers/auth.py) owns the `users`/`sessions` tables and
 # already exposes account + auth flows under /auth. This module surfaces the
@@ -13,7 +13,7 @@ from typing import Optional
 
 # Reuse the platform's helpers — routers.auth is on sys.path (base api dir) and
 # already imported by main.py, so this keeps the password hash format and the
-# session table in lockstep with the rest of thrive_base.
+# session table in lockstep with the rest of thrive_core.
 from routers.auth import get_db, hash_password, current_user_from_request
 
 router = APIRouter(prefix="/users", tags=["users"])

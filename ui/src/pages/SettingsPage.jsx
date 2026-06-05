@@ -1,6 +1,6 @@
 // =============================================================================
 // SettingsPage.jsx — Platform settings (account, modules)
-// thrive_base UI — user management lives on its own page (UsersPage / 👥)
+// thrive_core UI — user management lives on its own page (UsersPage / 👥)
 // =============================================================================
 import { useState, useEffect } from 'react'
 import { useAuth } from '../context/AuthContext'
@@ -35,7 +35,7 @@ function ModulesSection() {
       await api.patch(`/modules/${m.id}`, { enabled: !m.enabled })
       setModules(prev => prev.map(x => x.id === m.id ? { ...x, enabled: !x.enabled } : x))
       // let the top bar + landing hub refresh their module lists live
-      window.dispatchEvent(new CustomEvent('thrivebase:modules-changed'))
+      window.dispatchEvent(new CustomEvent('thrivecore:modules-changed'))
     } catch {}
     finally { setSaving(null) }
   }

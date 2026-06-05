@@ -1,26 +1,26 @@
-# thrive_base — Claude Context
+# thrive_core — Claude Context
 
 ## What this is
-thrive_base is the platform shell for a modular self-hosted household/lifestyle app.
+thrive_core is the platform shell for a modular self-hosted household/lifestyle app.
 It provides auth, a module loader, and a landing page. Everything else is a module.
 
-The broader vision is "thriveOS" — a custom Linux distro where thrive_base is the 
-entire point of the machine. But thrive_base itself runs on any Linux box via Docker.
+The broader vision is "thriveOS" — a custom Linux distro where thrive_core is the 
+entire point of the machine. But thrive_core itself runs on any Linux box via Docker.
 
 ## Related projects
 - `thrive` (nerfarrow/thrive) — the original monolithic app at thrive.nerfarrow.com. 
-  DO NOT touch this. It's live and working. thrive_base is the clean rewrite.
+  DO NOT touch this. It's live and working. thrive_core is the clean rewrite.
 - `thriveOS` — future custom distro, not started yet
-- Module repos live under thrive_base/modules/ (cloned separately)
+- Module repos live under thrive_core/modules/ (cloned separately)
 
 ## Architecture
 
 ### Backend
 - FastAPI, Python 3.12
 - Plain `sqlite3` with `conn.row_factory = sqlite3.Row`
-- One shared DB: `/data/thrivebase.db`
+- One shared DB: `/data/thrivecore.db`
 - Auth: PBKDF2-HMAC-SHA256 (stdlib, no deps), httpOnly session cookie
-- Cookie name: `thrivebase_session`
+- Cookie name: `thrivecore_session`
 - `COOKIE_SECURE=false` for local http dev, `true` for HTTPS production
 - Module loader: `api/modules.py` scans `modules/` on startup
 
@@ -32,11 +32,11 @@ entire point of the machine. But thrive_base itself runs on any Linux box via Do
 - `--text-primary #e8e6e0`, `--text-secondary #aaa`, `--text-tertiary #666`
 - `--color-success #22c55e`, `--color-danger #ef4444`
 - `--border-color #2a2a2a`
-- API calls via `src/api.js` — uses `credentials: 'include'`, fires `thrivebase:unauthorized` event on 401
+- API calls via `src/api.js` — uses `credentials: 'include'`, fires `thrivecore:unauthorized` event on 401
 
 ### Deploy
 - Docker Compose, port 9500
-- UI container: nginx serving Vite build, proxies `/api/` to `thrivebase_api:8000`
+- UI container: nginx serving Vite build, proxies `/api/` to `thrivecore_api:8000`
 - `modules/` folder mounted as volume into API container — no rebuild needed to install modules
 
 ## Module System
@@ -69,19 +69,19 @@ Only `users` is core.
 
 ### Installing a module
 ```bash
-cd ~/thrive_base/modules
+cd ~/thrive_core/modules
 git clone git@github.com:nerfarrow/thrive_vehicles.git vehicles
 docker compose restart api   # no rebuild needed
 ```
 
 ### Bundled module
-thrive_base ships with exactly one module: `users`. It's the only module tracked
+thrive_core ships with exactly one module: `users`. It's the only module tracked
 in this repo (`.gitignore` ignores `modules/*` except `modules/users/`). Everything
 else — vehicles, budget, vault — is a separate repo you install into `modules/`.
 - `modules/users/` — user management (admin Users page, roles, disable/enable)
 
 ### DB table ownership
-- `thrive_base` owns: `users`, `sessions`, `modules`
+- `thrive_core` owns: `users`, `sessions`, `modules`
 - `users` module owns: (currently uses base users table, may add user_preferences later)
 - installed modules own their own tables (e.g. a vehicles module would own
   `vehicles`, `oil_changes`, `tires`, `mpg_entries`)
@@ -96,10 +96,10 @@ else — vehicles, budget, vault — is a separate repo you install into `module
 
 ## File Structure
 ```
-thrive_base/
+thrive_core/
 ├── CLAUDE.md               ← you are here
 ├── docker-compose.yml
-├── data/                   ← gitignored, holds thrivebase.db
+├── data/                   ← gitignored, holds thrivecore.db
 ├── modules/                ← only users/ is tracked; other modules cloned here
 │   └── users/              ← bundled default module
 │       ├── module.json
@@ -158,7 +158,7 @@ thrive_base/
 
 ## Running locally
 ```bash
-cd ~/thrive_base
+cd ~/thrive_core
 docker compose up -d --build   # full rebuild
 docker compose restart api     # restart API only (e.g. after adding a module)
 docker compose logs api        # check module discovery output
@@ -167,4 +167,4 @@ Access at http://nerfBase-ip:9500
 
 ## Owner
 nerfarrow — home server: nerfBase (Ubuntu)
-GitHub: github.com/nerfarrow/thrive_base
+GitHub: github.com/nerfarrow/thrive_core

@@ -1,13 +1,13 @@
 services:
   api:
     build: ./api
-    container_name: thrivebase_api
+    container_name: thrivecore_api
     restart: unless-stopped
     volumes:
       - ./data:/data
       - ./modules:/app/modules   # modules mounted live — no rebuild needed
     environment:
-      - DB_FILE=/data/thrivebase.db
+      - DB_FILE=/data/thrivecore.db
       - MODULES_DIR=/app/modules
       - COOKIE_SECURE=false   # http dev on :9500 — Secure cookies get dropped over http
       - SESSION_DAYS=30
@@ -16,7 +16,7 @@ services:
 
   ui:
     build: ./ui
-    container_name: thrivebase_ui
+    container_name: thrivecore_ui
     restart: unless-stopped
     ports:
       - "9500:80"

@@ -1,6 +1,6 @@
 // =============================================================================
 // LandingPage.jsx — Module hub
-// thrive_base UI
+// thrive_core UI
 // =============================================================================
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
@@ -16,8 +16,8 @@ export default function LandingPage() {
   useEffect(() => {
     const fetchModules = () => api.get('/modules').then(setModules).catch(() => {})
     fetchModules()
-    window.addEventListener('thrivebase:modules-changed', fetchModules)
-    return () => window.removeEventListener('thrivebase:modules-changed', fetchModules)
+    window.addEventListener('thrivecore:modules-changed', fetchModules)
+    return () => window.removeEventListener('thrivecore:modules-changed', fetchModules)
   }, [])
 
   // core modules (e.g. users) live in the top bar, not as feature tiles here

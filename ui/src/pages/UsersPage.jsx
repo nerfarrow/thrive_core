@@ -1,6 +1,6 @@
 // =============================================================================
 // UsersPage.jsx — Users module page (admin user management)
-// thrive_base UI — reached via the 👥 icon in the top bar
+// thrive_core UI — reached via the 👥 icon in the top bar
 // =============================================================================
 import { useState, useEffect, useCallback } from 'react'
 import { useAuth } from '../context/AuthContext'

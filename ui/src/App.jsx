@@ -1,5 +1,5 @@
 // =============================================================================
-// App.jsx — thrive_base shell
+// App.jsx — thrive_core shell
 // Minimal: auth gate, top nav, landing, settings
 // =============================================================================
 import { useState, useEffect } from 'react'
@@ -23,8 +23,8 @@ function TopNav() {
     if (!user) { setModules([]); return }
     const fetchModules = () => api.get('/modules').then(setModules).catch(() => {})
     fetchModules()
-    window.addEventListener('thrivebase:modules-changed', fetchModules)
-    return () => window.removeEventListener('thrivebase:modules-changed', fetchModules)
+    window.addEventListener('thrivecore:modules-changed', fetchModules)
+    return () => window.removeEventListener('thrivecore:modules-changed', fetchModules)
   }, [user])
   const navModules = modules.filter(m => m.enabled && m.nav_path)
 

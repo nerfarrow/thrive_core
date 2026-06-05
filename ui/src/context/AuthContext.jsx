@@ -18,8 +18,8 @@ export function AuthProvider({ children }) {
   useEffect(() => { refresh() }, [refresh])
   useEffect(() => {
     const fn = () => setUser(null)
-    window.addEventListener('thrivebase:unauthorized', fn)
-    return () => window.removeEventListener('thrivebase:unauthorized', fn)
+    window.addEventListener('thrivecore:unauthorized', fn)
+    return () => window.removeEventListener('thrivecore:unauthorized', fn)
   }, [])
 
   const login    = async (u, p) => { const r = await api.post('/auth/login',   { username: u, password: p }); setUser(r); return r }
