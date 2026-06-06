@@ -63,14 +63,20 @@ function TopNav() {
   }
 
   const path = location.pathname
-  const iconBtn = (id) => ({
-    width: 36, height: 36, borderRadius: 8,
-    background: path.startsWith(`/${id}`) || (id === 'home' && path === '/') ? 'var(--bg-tertiary,#2a2a2a)' : hov === id ? 'var(--bg-tertiary,#222)' : 'none',
-    border: 'none', cursor: 'pointer', fontSize: 16,
-    display: 'flex', alignItems: 'center', justifyContent: 'center',
-    opacity: path.startsWith(`/${id}`) || (id === 'home' && path === '/') ? 1 : hov === id ? 0.85 : 0.5,
-    transition: 'opacity 0.12s, background 0.12s',
-  })
+  // active module icon sits on a pill tinted with the module's own color; a 1px
+  // (transparent when idle) border keeps sizing stable across states.
+  const iconBtn = (id, color) => {
+    const active = path.startsWith(`/${id}`) || (id === 'home' && path === '/')
+    return {
+      width: 36, height: 36, borderRadius: 8,
+      background: active ? (color ? `${color}26` : 'var(--bg-tertiary,#2a2a2a)') : hov === id ? 'var(--bg-tertiary,#222)' : 'none',
+      border: `1px solid ${active && color ? `${color}66` : 'transparent'}`,
+      cursor: 'pointer', fontSize: 16,
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      opacity: active ? 1 : hov === id ? 0.85 : 0.5,
+      transition: 'opacity 0.12s, background 0.12s, border-color 0.12s',
+    }
+  }
 
   if (!user) return null
   return (
@@ -92,9 +98,9 @@ function TopNav() {
             onDrop={e => { e.preventDefault(); dropOn(m.id) }}
             onDragEnd={() => { setDragId(null); setOverId(null) }}
             style={{
-              ...iconBtn(m.id),
+              ...iconBtn(m.id, m.color),
               cursor: 'grab',
-              opacity: dragId === m.id ? 0.3 : iconBtn(m.id).opacity,
+              opacity: dragId === m.id ? 0.3 : iconBtn(m.id, m.color).opacity,
               boxShadow: isOver ? 'inset 2px 0 0 var(--text-primary,#e8e6e0)' : 'none',
             }}
             onMouseEnter={() => setHov(m.id)}

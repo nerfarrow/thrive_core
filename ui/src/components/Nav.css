@@ -93,7 +93,7 @@
   cursor: pointer;
 }
 .nav-item:hover  { background: var(--bg-elevated); color: var(--text); }
-.nav-item.active { background: var(--accent-dim);  color: var(--accent); font-weight: 500; }
+.nav-item.active { background: #93c5fd;  color: #1e40af; font-weight: 600; }
 
 /* topbar/bottombar item tweaks */
 .nav--top .nav-item,
@@ -127,7 +127,7 @@
   white-space: nowrap;
 }
 .nav-accounts-toggle:hover  { background: var(--bg-elevated); color: var(--text); }
-.nav-accounts-toggle.active { background: var(--accent-dim);  color: var(--accent); font-weight: 500; }
+.nav-accounts-toggle.active { background: #93c5fd;  color: #1e40af; font-weight: 600; }
 
 .nav-accounts-chevron {
   font-size: 9px;

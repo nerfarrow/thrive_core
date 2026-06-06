@@ -70,7 +70,7 @@ function BudgetSidebar({ refreshKey }) {
       {/* Budget / accounts — collapsible, lists accounts + balances */}
       <button className={`nav-accounts-toggle ${path.startsWith('/budget/accounts') ? 'active' : ''}`}
         onClick={() => { setAccountsOpen(o => !o); navigate('/budget/accounts') }}>
-        <span>Budget</span>
+        <span>Accounts</span>
         <span className={`nav-accounts-chevron ${accountsOpen ? 'open' : ''}`}>▼</span>
       </button>
       <div className={`nav-accounts ${accountsOpen ? 'expanded' : ''}`}>
