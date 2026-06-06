@@ -1,0 +1,79 @@
+/* =============================================================================
+   categories.css — Categories page
+   thrive UI
+   ============================================================================= */
+
+.cat-tree {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.cat-group {
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+}
+
+.cat-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--border);
+}
+
+.cat-row:last-child {
+    border-bottom: none;
+}
+
+.cat-parent {
+    background: var(--bg-elevated);
+}
+
+.cat-parent .cat-name {
+    font-weight: 600;
+    color: var(--text);
+}
+
+.cat-child {
+    padding-left: 40px;
+}
+
+.cat-child .cat-name {
+    color: var(--text);
+}
+
+.cat-id {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-muted);
+    min-width: 28px;
+}
+
+.cat-name {
+    flex: 1;
+    font-size: 13px;
+}
+
+.row-actions {
+    display: flex;
+    gap: 4px;
+    opacity: 0;
+    transition: opacity 0.15s;
+}
+
+.cat-row:hover .row-actions {
+    opacity: 1;
+}
+
+.cat-count {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--text-muted);
+    background: var(--bg);
+    padding: 2px 8px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+}

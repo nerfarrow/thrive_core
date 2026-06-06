@@ -5,6 +5,8 @@
 import { useState, useEffect } from 'react'
 import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './context/AuthContext'
+import { ToastProvider }   from './context/ToastContext'
+import { ConfirmProvider } from './context/ConfirmModal'
 import { api } from './api'
 import LoginPage   from './components/LoginPage'
 import LandingPage from './pages/LandingPage'
@@ -12,6 +14,7 @@ import SettingsPage from './pages/SettingsPage'
 import UsersPage   from './pages/UsersPage'
 import HomePage    from './pages/HomePage'
 import VehiclesPage from './pages/VehiclesPage'
+import BudgetPage  from './pages/BudgetPage'
 
 // ── top nav ───────────────────────────────────────────────────────────────────
 // Custom nav icon order is persisted per-device (localStorage) — the icon
@@ -142,6 +145,7 @@ function Shell() {
           <Route path="/"         element={<RootRoute />} />
           <Route path="/home"     element={<HomePage />} />
           <Route path="/vehicles" element={<VehiclesPage />} />
+          <Route path="/budget/*" element={<BudgetPage />} />
           <Route path="/users"    element={<UsersPage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="*"         element={<Navigate to="/" replace />} />
@@ -167,7 +171,11 @@ export default function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <Gate />
+        <ToastProvider>
+          <ConfirmProvider>
+            <Gate />
+          </ConfirmProvider>
+        </ToastProvider>
       </AuthProvider>
     </BrowserRouter>
   )

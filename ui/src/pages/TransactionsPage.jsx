@@ -1,0 +1,459 @@
+// =============================================================================
+// TransactionsPage.jsx — Transaction list, filters, Plaid sync, bulk actions
+// thrive UI
+// =============================================================================
+
+import { useEffect, useRef, useState, useCallback } from 'react'
+import { api } from '../api'
+import { useToast } from '../context/ToastContext'
+import { useConfirm } from '../context/ConfirmModal'
+import { fmtMoney, SYNC_OPTIONS } from '../utils/constants'
+import TransactionRow from '../components/TransactionRow'
+import TransactionForm from '../components/TransactionForm'
+import ImportPanel from '../components/ImportPanel'
+import VerifyMatchPopup from '../components/VerifyMatchPopup'
+import BulkActionBar from '../components/BulkActionBar'
+import './Page.css'
+
+const PAGE_SIZE = 50
+
+export default function TransactionsPage({ initial = {}, onBalanceChange }) {
+    const { showToast } = useToast()
+    const { confirm } = useConfirm()
+
+    const [transactions, setTransactions] = useState([])
+    const [accounts, setAccounts] = useState([])
+    const [payees, setPayees] = useState([])
+    const [categories, setCategories] = useState([])
+    const [loading, setLoading] = useState(true)
+    const [loadingMore, setLoadingMore] = useState(false)
+    const [hasMore, setHasMore] = useState(true)
+    const [offset, setOffset] = useState(0)
+    const [plaidAcctIds, setPlaidAcctIds] = useState(new Set())
+    const [syncingPlaid, setSyncingPlaid] = useState(false)
+    const [syncOption, setSyncOption] = useState(SYNC_OPTIONS[2])
+    const [selected, setSelected] = useState(new Set())
+
+    const [accountId, setAccountId] = useState(initial.accountId ? String(initial.accountId) : '')
+    const [fromDate, setFromDate] = useState('')
+    const [toDate, setToDate] = useState('')
+
+    const [showAdd, setShowAdd] = useState(false)
+    const [showImport, setShowImport] = useState(!!initial.plaidRows)
+    const [editingId, setEditingId] = useState(null)
+    const [verifyId, setVerifyId] = useState(null)
+    const [plaidPreload, setPlaidPreload] = useState(initial.plaidRows || null)
+
+    const sentinelRef = useRef(null)
+
+    // ── Data loading ──────────────────────────────────────────────────────────
+
+    async function loadLookups() {
+        try {
+            const [a, p, c, conns] = await Promise.all([
+                api.get('/budget/accounts/'),
+                api.get('/payees/'),
+                api.get('/categories/'),
+                api.get('/plaid/connections'),
+            ])
+            setAccounts(a)
+            setPayees(p)
+            setCategories(c)
+            setPlaidAcctIds(new Set(conns.map(c => c.account_id)))
+            onBalanceChange?.()
+        } catch (e) {
+            showToast(e.message, 'error')
+        }
+    }
+
+    async function fetchPage(currentOffset, replace = false) {
+        if (replace) setLoading(true)
+        else setLoadingMore(true)
+        const params = new URLSearchParams()
+        if (accountId) params.set('account_id', accountId)
+        if (fromDate) params.set('from_date', fromDate)
+        if (toDate) params.set('to_date', toDate)
+        params.set('limit', PAGE_SIZE)
+        params.set('offset', currentOffset)
+        try {
+            const data = await api.get(`/transactions/?${params}`)
+            if (replace) {
+                setTransactions(data)
+                setSelected(new Set())
+            } else {
+                setTransactions(prev => [...prev, ...data])
+            }
+            setHasMore(data.length === PAGE_SIZE)
+            setOffset(currentOffset + data.length)
+        } catch (e) {
+            showToast(e.message, 'error')
+        } finally {
+            if (replace) setLoading(false)
+            else setLoadingMore(false)
+        }
+    }
+
+    // Reset and reload from the top whenever filters change
+    useEffect(() => {
+        setOffset(0)
+        setHasMore(true)
+        fetchPage(0, true)
+    }, [accountId, fromDate, toDate])
+
+    useEffect(() => { loadLookups() }, [])
+    useEffect(() => {
+        api.get('/plaid/connections')
+            .then(conns => setPlaidAcctIds(new Set(conns.map(c => c.account_id))))
+            .catch(() => { })
+    }, [accountId])
+
+    // ── Infinite scroll sentinel ──────────────────────────────────────────────
+
+    const handleIntersect = useCallback((entries) => {
+        if (entries[0].isIntersecting && hasMore && !loading && !loadingMore) {
+            fetchPage(offset)
+        }
+    }, [hasMore, loading, loadingMore, offset, accountId, fromDate, toDate])
+
+    useEffect(() => {
+        const el = sentinelRef.current
+        if (!el) return
+        const observer = new IntersectionObserver(handleIntersect, { rootMargin: '200px' })
+        observer.observe(el)
+        return () => observer.disconnect()
+    }, [handleIntersect])
+
+    // Helper used by actions that need a clean reload
+    function reload() { setOffset(0); setHasMore(true); fetchPage(0, true) }
+
+    // ── Single row actions ────────────────────────────────────────────────────
+
+    async function handleDelete(id, payeeName) {
+        const ok = await confirm(`Delete transaction '${payeeName || 'this'}'?`, { danger: true })
+        if (!ok) return
+        try {
+            await api.del(`/transactions/${id}`)
+            showToast('Deleted', 'success')
+            reload(); loadLookups()
+        } catch (e) { showToast(e.message, 'error') }
+    }
+
+    async function handleCycleStatus(t) {
+        const next = {
+            null: 'Cleared', Cleared: 'Reconciled', Reconciled: 'none',
+        }[t.cleared === null || t.cleared === undefined ? 'null' : t.cleared]
+        try {
+            await api.patch(`/transactions/${t.id}`, { cleared: next })
+            reload()
+        } catch (e) { showToast(e.message, 'error') }
+    }
+
+    // ── Plaid sync ────────────────────────────────────────────────────────────
+
+    async function handlePlaidSync() {
+        if (!accountId) return
+        setSyncingPlaid(true)
+        try {
+            const body = { account_id: parseInt(accountId) }
+            if (syncOption.start_date) { body.start_date = syncOption.start_date }
+            else { body.days = syncOption.days }
+            const result = await api.post('/plaid/sync', body)
+            if (!result.rows || result.rows.length === 0) {
+                showToast(`Up to date — ${result.skipped} already imported`, 'info')
+                return
+            }
+            setPlaidPreload(result.rows)
+            setShowImport(true)
+            setShowAdd(false)
+            setEditingId(null)
+        } catch (e) {
+            showToast(e.message || 'Sync failed', 'error')
+        } finally {
+            setSyncingPlaid(false)
+        }
+    }
+
+    // ── Selection ─────────────────────────────────────────────────────────────
+
+    function toggleSelect(id) {
+        setSelected(prev => {
+            const next = new Set(prev)
+            next.has(id) ? next.delete(id) : next.add(id)
+            return next
+        })
+    }
+
+    function toggleSelectAll() {
+        if (selected.size === transactions.length) setSelected(new Set())
+        else setSelected(new Set(transactions.map(t => t.id)))
+    }
+
+    // ── Bulk actions ──────────────────────────────────────────────────────────
+
+    async function handleBulkDelete() {
+        const ok = await confirm(`Delete ${selected.size} transaction${selected.size !== 1 ? 's' : ''}?`, { danger: true })
+        if (!ok) return
+        try {
+            const res = await api.post('/transactions/bulk/delete', { ids: [...selected] })
+            showToast(`Deleted ${res.deleted}`, 'success')
+            reload(); loadLookups()
+        } catch (e) { showToast(e.message, 'error') }
+    }
+
+    async function handleBulkStatus(cleared) {
+        try {
+            const res = await api.post('/transactions/bulk/status', { ids: [...selected], cleared })
+            showToast(`Updated ${res.updated}`, 'success')
+            reload()
+        } catch (e) { showToast(e.message, 'error') }
+    }
+
+    async function handleBulkCategory(categoryId) {
+        try {
+            const res = await api.post('/transactions/bulk/category', {
+                ids: [...selected],
+                category_id: categoryId ? parseInt(categoryId) : null,
+            })
+            showToast(`Updated ${res.updated}`, 'success')
+            reload()
+        } catch (e) { showToast(e.message, 'error') }
+    }
+
+    async function handleBulkPayee(payeeId) {
+        try {
+            const res = await api.post('/transactions/bulk/payee', {
+                ids: [...selected],
+                payee_id: payeeId ? parseInt(payeeId) : null,
+            })
+            showToast(`Updated ${res.updated}`, 'success')
+            reload()
+        } catch (e) { showToast(e.message, 'error') }
+    }
+
+    async function handleBulkVerify() {
+        try {
+            const res = await api.post('/transactions/bulk/verify', { ids: [...selected] })
+            showToast(`Verified ${res.verified}${res.skipped ? `, skipped ${res.skipped}` : ''}`, 'success')
+            reload(); loadLookups()
+        } catch (e) { showToast(e.message, 'error') }
+    }
+
+    // ── Derived ───────────────────────────────────────────────────────────────
+
+    const selectedAccount = accounts.find(a => a.id === parseInt(accountId))
+    const accountHasPlaid = accountId && plaidAcctIds.has(parseInt(accountId))
+    const allSelected = transactions.length > 0 && selected.size === transactions.length
+    const someSelected = selected.size > 0 && !allSelected
+
+    // ── Render ────────────────────────────────────────────────────────────────
+
+    return (
+        <div className="page page-wide">
+            <div className="page-header">
+                <h1 className="page-title">Transactions</h1>
+                <span className="muted">
+                    {transactions.length} shown
+                    {selectedAccount && ` · ${selectedAccount.name} bal ${fmtMoney(selectedAccount.balance || 0)}`}
+                </span>
+            </div>
+
+            <div className="txn-filters">
+                <select className="input" value={accountId} onChange={e => setAccountId(e.target.value)}>
+                    <option value="">All accounts</option>
+                    {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                </select>
+                <input className="input" type="date" value={fromDate} onChange={e => setFromDate(e.target.value)} />
+                <input className="input" type="date" value={toDate} onChange={e => setToDate(e.target.value)} />
+                <button className="btn btn-primary" onClick={() => {
+                    setShowAdd(true); setShowImport(false); setEditingId(null); setPlaidPreload(null)
+                }}>+ Add</button>
+                <button className="btn" onClick={() => {
+                    setShowImport(true); setShowAdd(false); setEditingId(null); setPlaidPreload(null)
+                }}>Import</button>
+                {accountHasPlaid && (
+                    <div className="txn-plaid-sync">
+                        <select
+                            className="txn-plaid-sync-select"
+                            value={SYNC_OPTIONS.indexOf(syncOption)}
+                            onChange={e => setSyncOption(SYNC_OPTIONS[parseInt(e.target.value)])}
+                        >
+                            {SYNC_OPTIONS.map((opt, i) => <option key={i} value={i}>{opt.label}</option>)}
+                        </select>
+                        <button
+                            className="txn-plaid-sync-btn"
+                            onClick={handlePlaidSync}
+                            disabled={syncingPlaid}
+                        >
+                            {syncingPlaid ? 'Fetching…' : '↻ Sync Plaid'}
+                        </button>
+                    </div>
+                )}
+            </div>
+
+            {showAdd && (
+                <TransactionForm
+                    accounts={accounts} payees={payees} categories={categories}
+                    defaultAccountId={accountId}
+                    onCancel={() => setShowAdd(false)}
+                    onSaved={() => { setShowAdd(false); reload(); loadLookups() }}
+                    showToast={showToast}
+                    onPayeeCreated={loadLookups}
+                    onCategoryCreated={loadLookups}
+                />
+            )}
+
+            {showImport && (
+                <ImportPanel
+                    accounts={accounts}
+                    defaultAccountId={accountId}
+                    preloadedRows={plaidPreload}
+                    onCancel={() => { setShowImport(false); setPlaidPreload(null) }}
+                    onImported={() => { setShowImport(false); setPlaidPreload(null); reload(); loadLookups() }}
+                    showToast={showToast}
+                />
+            )}
+
+            {verifyId && (
+                <VerifyMatchPopup
+                    transactionId={verifyId}
+                    onCancel={() => setVerifyId(null)}
+                    onVerified={() => { setVerifyId(null); reload(); loadLookups() }}
+                    showToast={showToast}
+                    onPayeeCreated={loadLookups}
+                    onCategoryCreated={loadLookups}
+                />
+            )}
+
+            {loading ? (
+                <div className="muted">Loading…</div>
+            ) : transactions.length === 0 ? (
+                <div className="muted">No transactions match the filters.</div>
+            ) : (
+                <div className={`txn-table ${accountId ? 'has-balance' : 'all-accounts'}`}>
+                    <div className="txn-row txn-header">
+                        <input
+                            type="checkbox"
+                            className="txn-check"
+                            checked={allSelected}
+                            ref={el => { if (el) el.indeterminate = someSelected }}
+                            onChange={toggleSelectAll}
+                            title="Select all"
+                        />
+                        <span className="txn-status-col" title="○ uncleared · ◐ cleared · ● reconciled"></span>
+                        <span>Date</span>
+                        {!accountId && <span>Account</span>}
+                        <span>Payee</span>
+                        <span>Category</span>
+                        <span>Memo</span>
+                        <span className="txn-amount-col">Amount</span>
+                        {accountId && <span className="txn-amount-col">Balance</span>}
+                    </div>
+                    {(() => {
+                        // Reorder so matched pairs are always adjacent, preventing
+                        // unrelated rows from being visually trapped inside the pair border.
+                        const byId = Object.fromEntries(transactions.map(t => [t.id, t]))
+                        const ordered = []
+                        const emitted = new Set()
+                        for (const t of transactions) {
+                            if (emitted.has(t.id)) continue
+                            ordered.push(t)
+                            emitted.add(t.id)
+                            if (t.matched_transaction_id && byId[t.matched_transaction_id] && !emitted.has(t.matched_transaction_id)) {
+                                ordered.push(byId[t.matched_transaction_id])
+                                emitted.add(t.matched_transaction_id)
+                            }
+                        }
+
+                        // Recompute running balance after reordering so each row shows
+                        // the correct balance for its new visual position.
+                        // transactions[0].balance is always the backend's starting running
+                        // value regardless of cleared status, so it's a safe anchor.
+                        const hasBalance = transactions.length > 0 && transactions[0].balance !== undefined
+                        let runningCents = hasBalance ? Math.round(transactions[0].balance * 100) : 0
+                        const rebalanced = ordered.map(t => {
+                            const bal = hasBalance ? runningCents / 100 : t.balance
+                            if (hasBalance && t.cleared !== 'Unverified') {
+                                runningCents = Math.round(runningCents - t.amount * 100)
+                            }
+                            return { ...t, balance: bal }
+                        })
+
+                        const pairMap = {}
+                        rebalanced.forEach(t => {
+                            if (t.matched_transaction_id) {
+                                const key = Math.min(t.id, t.matched_transaction_id) + '-' + Math.max(t.id, t.matched_transaction_id)
+                                pairMap[t.id] = key
+                                pairMap[t.matched_transaction_id] = key
+                            }
+                        })
+                        const rendered = []
+                        const seenPairKeys = {}
+                        rebalanced.forEach(t => {
+                            const pairKey = pairMap[t.id]
+                            const isFirst = pairKey && !seenPairKeys[pairKey]
+                            if (pairKey) seenPairKeys[pairKey] = true
+                            const row = editingId === t.id ? (
+                                <TransactionForm
+                                    key={t.id}
+                                    existing={t}
+                                    accounts={accounts} payees={payees} categories={categories}
+                                    onCancel={() => setEditingId(null)}
+                                    onSaved={() => { setEditingId(null); reload(); loadLookups() }}
+                                    showToast={showToast}
+                                    onPayeeCreated={loadLookups}
+                                    onCategoryCreated={loadLookups}
+                                />
+                            ) : (
+                                <TransactionRow
+                                    key={t.id} t={t}
+                                    showBalance={!!accountId} showAccount={!accountId}
+                                    selected={selected.has(t.id)}
+                                    onSelect={() => toggleSelect(t.id)}
+                                    onEdit={() => {
+                                        if (t.cleared === 'Unverified' && t.matched_transaction_id) {
+                                            setVerifyId(t.id); setEditingId(null)
+                                        } else {
+                                            setEditingId(t.id)
+                                            setShowAdd(false); setShowImport(false); setVerifyId(null)
+                                        }
+                                    }}
+                                    onDelete={() => handleDelete(t.id, t.payee_name)}
+                                    onCycleStatus={() => handleCycleStatus(t)}
+                                    onAccountClick={(id) => setAccountId(String(id))}
+                                    matchClass={pairKey ? (isFirst ? 'match-pair match-pair--top' : 'match-pair match-pair--bottom') : ''}
+                                />
+                            )
+                            rendered.push(row)
+                        })
+                        return rendered
+                    })()}
+                </div>
+            )}
+
+            {/* Infinite scroll sentinel */}
+            <div ref={sentinelRef} style={{ height: 1 }} />
+            {loadingMore && <div className="muted" style={{ padding: '12px', textAlign: 'center' }}>Loading more…</div>}
+            {!hasMore && transactions.length > 0 && (
+                <div className="muted" style={{ padding: '12px', textAlign: 'center', fontSize: '12px' }}>
+                    All {transactions.length} transactions loaded
+                </div>
+            )}
+
+            {selected.size > 0 && (
+                <BulkActionBar
+                    count={selected.size}
+                    transactions={transactions}
+                    selected={selected}
+                    categories={categories}
+                    payees={payees}
+                    onClear={() => setSelected(new Set())}
+                    onDelete={handleBulkDelete}
+                    onStatus={handleBulkStatus}
+                    onCategory={handleBulkCategory}
+                    onPayee={handleBulkPayee}
+                    onVerify={handleBulkVerify}
+                />
+            )}
+        </div>
+    )
+}

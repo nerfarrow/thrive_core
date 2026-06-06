@@ -1,0 +1,371 @@
+/* =============================================================================
+   transactions.css — Transaction table, filters, status, bulk bar, Plaid sync
+   thrive UI
+   ============================================================================= */
+
+/* ── Filters bar ───────────────────────────────────────────────────────────── */
+.txn-filters {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+.txn-filters .input {
+    flex: 0 1 auto;
+    width: auto;
+}
+
+.txn-filters>.input:first-child {
+    flex: 1;
+    min-width: 200px;
+}
+
+/* ── Table ─────────────────────────────────────────────────────────────────── */
+.txn-table {
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+}
+
+.txn-row {
+    display: grid;
+    grid-template-columns: 20px 28px 110px 1fr 1fr 1fr 100px;
+    align-items: center;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border);
+    font-size: 12px;
+    gap: 12px;
+    position: relative;
+}
+
+.txn-table.has-balance .txn-row {
+    grid-template-columns: 20px 28px 110px 1fr 1fr 1fr 100px 100px;
+}
+
+.txn-table.all-accounts .txn-row {
+    grid-template-columns: 20px 28px 110px 0.8fr 1fr 1fr 1fr 100px;
+}
+
+.txn-row:last-child {
+    border-bottom: none;
+}
+
+.txn-row:hover {
+    background: var(--bg-elevated);
+}
+
+.txn-header {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    background: var(--bg-elevated);
+}
+
+.txn-header:hover {
+    background: var(--bg-elevated);
+}
+
+/* ── Row cells ─────────────────────────────────────────────────────────────── */
+.txn-date {
+    font-family: var(--font-mono);
+    color: var(--text-muted);
+    font-size: 11px;
+}
+
+.txn-payee {
+    font-weight: 600;
+    color: var(--text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.txn-category,
+.txn-memo {
+    color: var(--text-muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 11px;
+}
+
+.txn-account {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.txn-amount-col {
+    text-align: right;
+}
+
+.txn-balance {
+    font-family: var(--font-mono);
+    color: var(--text-muted);
+}
+
+.txn-status-col {
+    text-align: center;
+}
+
+/* ── Cleared button ────────────────────────────────────────────────────────── */
+.txn-cleared {
+    font-family: var(--font-mono);
+    font-size: 14px;
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    transition: transform 0.15s;
+}
+
+.txn-cleared:hover {
+    transform: scale(1.3);
+}
+
+.cleared-null {
+    color: var(--text-muted);
+    opacity: 0.5;
+}
+
+.cleared-Cleared {
+    color: var(--accent);
+}
+
+.cleared-Reconciled {
+    color: var(--success);
+}
+
+.cleared-Unverified {
+    color: #f59e0b !important;
+}
+
+/* ── Row actions (hover reveal) ────────────────────────────────────────────── */
+.txn-actions {
+    position: absolute;
+    top: 50%;
+    right: 8px;
+    transform: translateY(-50%);
+    display: flex;
+    gap: 4px;
+    background: var(--bg-elevated);
+    padding: 2px 4px;
+    border-radius: var(--radius);
+    box-shadow: 0 0 16px var(--bg-elevated);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.15s;
+}
+
+.txn-row:hover .txn-actions {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+/* ── Clickable account link ────────────────────────────────────────────────── */
+.txn-account-link {
+    padding: 0;
+    font-size: inherit;
+    color: inherit;
+}
+
+/* ── Checkbox ──────────────────────────────────────────────────────────────── */
+.txn-check {
+    width: 15px;
+    height: 15px;
+    flex-shrink: 0;
+    accent-color: var(--accent);
+    cursor: pointer;
+}
+
+.txn-row--selected {
+    background: var(--accent-dim) !important;
+}
+
+/* ── Matched pair highlight ────────────────────────────────────────────────── */
+.match-pair {
+    border-left: 2px solid #f59e0b;
+    border-right: 2px solid #f59e0b;
+    margin: 0 -2px;
+}
+
+.match-pair--top {
+    border-top: 2px solid #f59e0b;
+    border-radius: 4px 4px 0 0;
+    margin-top: 6px;
+}
+
+.match-pair--bottom {
+    border-bottom: 2px solid #f59e0b;
+    border-radius: 0 0 4px 4px;
+    margin-bottom: 6px;
+}
+
+/* ── Plaid sync connected group ────────────────────────────────────────────── */
+.txn-plaid-sync {
+    display: flex;
+    align-items: stretch;
+    border: 1px solid var(--accent);
+    border-radius: var(--radius);
+    overflow: hidden;
+}
+
+.txn-plaid-sync-select {
+    background: var(--bg-elevated);
+    border: none;
+    border-right: 1px solid var(--accent);
+    color: var(--text);
+    font-size: 13px;
+    padding: 5px 8px;
+    outline: none;
+}
+
+.txn-plaid-sync-btn {
+    background: var(--accent-dim);
+    border: none;
+    color: var(--accent);
+    font-size: 13px;
+    padding: 5px 12px;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+
+.txn-plaid-sync-btn:hover:not(:disabled) {
+    background: var(--accent);
+    color: var(--bg-surface);
+}
+
+.txn-plaid-sync-btn:disabled {
+    opacity: 0.4;
+}
+
+/* ── Bulk action bar ───────────────────────────────────────────────────────── */
+.bulk-bar {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--bg-surface);
+    border: 1px solid var(--accent);
+    border-radius: var(--radius);
+    padding: 10px 14px;
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
+    z-index: 200;
+    flex-wrap: wrap;
+    max-width: 90vw;
+}
+
+.bulk-bar-count {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--accent);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    white-space: nowrap;
+}
+
+.bulk-bar-divider {
+    width: 1px;
+    height: 20px;
+    background: var(--border);
+    flex-shrink: 0;
+}
+
+.bulk-bar-group {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.bulk-bar-label {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-muted);
+    white-space: nowrap;
+}
+
+.bulk-bar-btn {
+    font-size: 12px;
+    padding: 4px 10px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--bg-elevated);
+    color: var(--text);
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.15s, color 0.15s;
+}
+
+.bulk-bar-btn:hover:not(:disabled) {
+    background: var(--bg-surface);
+    border-color: var(--text-muted);
+}
+
+.bulk-bar-btn:disabled {
+    opacity: 0.4;
+}
+
+.bulk-bar-btn--danger {
+    color: var(--danger, #e05c5c);
+    border-color: rgba(224, 92, 92, 0.3);
+}
+
+.bulk-bar-btn--danger:hover {
+    background: rgba(224, 92, 92, 0.1) !important;
+}
+
+.bulk-bar-btn--accent {
+    color: var(--accent);
+    border-color: var(--accent);
+    background: var(--accent-dim);
+}
+
+.bulk-bar-btn--accent:hover {
+    background: var(--accent) !important;
+    color: var(--bg-surface) !important;
+}
+
+.bulk-bar-select {
+    font-size: 12px;
+    padding: 4px 8px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--bg-elevated);
+    color: var(--text);
+}
+
+.bulk-bar-clear {
+    margin-left: 4px;
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font-size: 14px;
+    cursor: pointer;
+    padding: 2px 6px;
+    border-radius: var(--radius);
+    transition: color 0.15s;
+}
+
+.bulk-bar-clear:hover {
+    color: var(--text);
+}
+
+.split-row-cats {
+    position: relative;
+    min-width: 0;
+    flex: 1;
+}

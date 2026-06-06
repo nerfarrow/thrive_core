@@ -1,0 +1,11 @@
+/* =============================================================================
+   Page.css — Imports all thrive UI stylesheets
+   thrive UI
+   ============================================================================= */
+
+@import './base.css';
+@import './categories.css';
+@import './accounts.css';
+@import './transactions.css';
+@import './import.css';
+@import './payees.css';

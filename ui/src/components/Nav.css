@@ -1,0 +1,199 @@
+.nav {
+  display: flex;
+  background: var(--bg-surface);
+  border-color: var(--border);
+  border-style: solid;
+}
+
+/* topbar */
+.nav--top {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 52px;
+  border-width: 0 0 1px 0;
+  flex-direction: row;
+  align-items: center;
+  padding: 0 16px;
+  gap: 4px;
+  z-index: 50;
+}
+
+/* bottombar */
+.nav--bottom {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 56px;
+  border-width: 1px 0 0 0;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-around;
+  padding: 0 8px;
+  z-index: 50;
+}
+
+/* sidebar */
+.nav--sidebar {
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  border-width: 0;
+  flex-direction: column;
+  padding: 24px 12px;
+  gap: 2px;
+  z-index: 50;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+
+.nav--left  { left: 0;  border-right-width: 1px; }
+.nav--right { right: 0; border-left-width: 1px;  }
+
+.nav-resize {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  cursor: col-resize;
+  transition: background 0.15s;
+}
+.nav-resize:hover,
+.nav-resize:active { background: var(--accent); }
+.nav-resize--left  { right: -2px; }
+.nav-resize--right { left: -2px;  }
+
+.nav-brand { padding: 8px 12px 20px; }
+.nav-brand-text {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--accent);
+  letter-spacing: 0.05em;
+}
+
+/* nav items */
+.nav-item {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 400;
+  padding: 8px 12px;
+  border-radius: var(--radius);
+  text-align: left;
+  transition: background 0.15s, color 0.15s;
+  white-space: nowrap;
+  width: 100%;
+  cursor: pointer;
+}
+.nav-item:hover  { background: var(--bg-elevated); color: var(--text); }
+.nav-item.active { background: var(--accent-dim);  color: var(--accent); font-weight: 500; }
+
+/* topbar/bottombar item tweaks */
+.nav--top .nav-item,
+.nav--bottom .nav-item {
+  text-align: center;
+  padding: 6px 14px;
+}
+
+.nav-section {
+  display: flex;
+  flex-direction: column;
+}
+
+/* accounts toggle button */
+.nav-accounts-toggle {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 400;
+  padding: 8px 12px;
+  border-radius: var(--radius);
+  text-align: left;
+  width: 100%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  transition: background 0.15s, color 0.15s;
+  white-space: nowrap;
+}
+.nav-accounts-toggle:hover  { background: var(--bg-elevated); color: var(--text); }
+.nav-accounts-toggle.active { background: var(--accent-dim);  color: var(--accent); font-weight: 500; }
+
+.nav-accounts-chevron {
+  font-size: 9px;
+  opacity: 0.5;
+  transition: transform 0.2s;
+  flex-shrink: 0;
+}
+.nav-accounts-chevron.open { transform: rotate(180deg); }
+
+/* accounts list */
+.nav-accounts {
+  display: flex;
+  flex-direction: column;
+  margin: 2px 0 4px 8px;
+  padding-left: 8px;
+  border-left: 1px solid var(--border);
+  gap: 1px;
+  overflow: hidden;
+  max-height: 0;
+  transition: max-height 0.25s ease, opacity 0.2s ease;
+  opacity: 0;
+}
+.nav-accounts.expanded {
+  max-height: 800px;
+  opacity: 1;
+}
+
+.nav-account {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-family: var(--font-body);
+  font-size: 11px;
+  padding: 6px 8px;
+  border-radius: var(--radius);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  text-align: left;
+  transition: background 0.15s, color 0.15s;
+  width: 100%;
+  cursor: pointer;
+}
+.nav-account:hover { background: var(--bg-elevated); color: var(--text); }
+
+.nav-account-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  min-width: 0;
+}
+.nav-account-balance {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--success);
+  flex-shrink: 0;
+}
+.nav-account-balance.negative { color: var(--danger); }
+
+/* hide nested account list in top/bottom bar layouts */
+.nav--top .nav-accounts,
+.nav--bottom .nav-accounts { display: none; }
+.nav--top .nav-accounts-chevron,
+.nav--bottom .nav-accounts-chevron { display: none; }
+
+.nav-account.off-budget { opacity: 0.5; font-style: italic; }
+.nav-account.off-budget .nav-account-balance { color: var(--text-muted); }

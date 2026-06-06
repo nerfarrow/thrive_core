@@ -1,0 +1,308 @@
+/* =============================================================================
+   accounts.css — Accounts page, scheduled rows, plaid badge + sync
+   thrive UI
+   ============================================================================= */
+
+/* ── Account list ──────────────────────────────────────────────────────────── */
+.acct-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.acct-card {
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    transition: border-color 0.15s;
+}
+
+.acct-card:hover {
+    border-color: var(--accent-dim);
+}
+
+.acct-card.editing {
+    border-color: var(--accent);
+}
+
+.acct-main {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+}
+
+.acct-info {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.acct-name-row {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+}
+
+.acct-name {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text);
+}
+
+.acct-subtitle {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-muted);
+    padding-left: 38px;
+}
+
+.acct-balance {
+    font-family: var(--font-mono);
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--success);
+    white-space: nowrap;
+}
+
+.acct-balance.negative {
+    color: var(--danger);
+}
+
+.acct-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-top: 8px;
+    border-top: 1px solid var(--border);
+}
+
+.acct-actions {
+    display: flex;
+    gap: 6px;
+}
+
+.acct-edit-fields {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.acct-clickable .sched-info,
+.acct-clickable .sched-amount {
+    cursor: pointer;
+}
+
+.budget-toggle {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    white-space: nowrap;
+    flex: 0 0 auto;
+}
+
+.budget-toggle input[type="checkbox"] {
+    accent-color: var(--accent);
+    cursor: pointer;
+}
+
+.acct-card.off-budget {
+    opacity: 0.7;
+    border-style: dashed;
+}
+
+.acct-card.off-budget .acct-name {
+    color: var(--text-muted);
+}
+
+.off-budget-tag {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    padding: 2px 6px;
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    margin-left: 4px;
+}
+
+/* ── Scheduled rows (shared with accounts) ─────────────────────────────────── */
+.sched-row {
+    position: relative;
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 10px 16px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    transition: border-color 0.15s;
+}
+
+.sched-row:hover {
+    border-color: var(--accent-dim);
+}
+
+.sched-row.expanded {
+    flex-wrap: wrap;
+    border-color: var(--accent);
+}
+
+.sched-row.off-budget-row {
+    opacity: 0.65;
+    border-style: dashed;
+}
+
+.sched-row.off-budget-row .sched-payee {
+    font-style: italic;
+}
+
+.row-expanded {
+    flex: 1 0 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding-top: 10px;
+    margin-top: 6px;
+    border-top: 1px solid var(--border);
+}
+
+.row-expanded-actions {
+    display: flex;
+    gap: 6px;
+}
+
+.sched-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.sched-name-row {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    min-width: 0;
+}
+
+.sched-id {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--text-muted);
+    min-width: 22px;
+    flex-shrink: 0;
+}
+
+.sched-payee {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text);
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.sched-meta-inline {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.sched-toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+    gap: 12px;
+}
+
+.sort-select {
+    flex: 0 0 auto;
+    width: auto;
+    min-width: 180px;
+}
+
+/* ── Plaid badge ───────────────────────────────────────────────────────────── */
+.plaid-badge {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--accent);
+    background: var(--accent-dim);
+    border: 1px solid var(--accent);
+    border-radius: var(--radius);
+    padding: 1px 5px;
+}
+
+/* ── Account sync row ──────────────────────────────────────────────────────── */
+.acct-sync-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 0 4px;
+    border-top: 1px solid var(--border);
+    flex-wrap: wrap;
+}
+
+.acct-sync-select {
+    font-size: 12px;
+    padding: 4px 8px;
+    flex: 1;
+    min-width: 120px;
+}
+
+.acct-sync-btn {
+    font-size: 12px;
+    padding: 4px 12px;
+    white-space: nowrap;
+}
+
+/* ── Vault badge ───────────────────────────────────────────────────────────── */
+.vault-badge {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--success);
+    background: var(--success-dim, color-mix(in srgb, var(--success) 15%, transparent));
+    border: 1px solid var(--success);
+    border-radius: var(--radius);
+    padding: 1px 5px;
+}
+
+/* ── Account vault row ─────────────────────────────────────────────────────── */
+.acct-vault-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 0 4px;
+    border-top: 1px solid var(--border);
+    flex-wrap: wrap;
+}
+
+.acct-vault-select {
+    font-size: 12px;
+    padding: 4px 8px;
+    flex: 1;
+    min-width: 120px;
+}
+
+.acct-vault-unlink {
+    font-size: 11px;
+    padding: 4px 8px;
+    flex-shrink: 0;
+    line-height: 1;
+}

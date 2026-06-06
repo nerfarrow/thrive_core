@@ -1,0 +1,23 @@
+/* =============================================================================
+   budget-theme.css — alias the monolith budget CSS variables onto thrive_core's
+   palette. The ported budget stylesheets (base.css, transactions.css, …) use the
+   monolith's var names (--bg, --accent, --text, …); thrive_core uses --bg-primary
+   etc. Define the aliases once so the ported CSS renders with the right colors.
+   ============================================================================= */
+:root {
+  --bg:            var(--bg-primary,   #0f0f0f);
+  --bg-surface:    var(--bg-secondary, #181818);
+  --bg-elevated:   var(--bg-tertiary,  #222222);
+  --text:          var(--text-primary, #e8e6e0);
+  --text-muted:    var(--text-secondary, #aaaaaa);
+  --border:        var(--border-color, #2a2a2a);
+  --success:       var(--color-success, #22c55e);
+  --success-dim:   rgba(34, 197, 94, 0.14);
+  --danger:        var(--color-danger, #ef4444);
+  --accent:        #3b82f6;
+  --accent-dim:    #2563eb;
+  --accent-subtle: rgba(59, 130, 246, 0.14);
+  --bubble-color:  #3b82f6;
+  --radius:        8px;
+  --shadow:        0 2px 8px rgba(0, 0, 0, 0.35);
+}
