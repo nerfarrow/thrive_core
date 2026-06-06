@@ -15,6 +15,11 @@ services:
       # vehicles/mpg vision: local LLM hosts for the fuel-log OCR (override per box)
       - LMSTUDIO_BASE=http://192.168.0.50:1234
       - OLLAMA_BASE=http://192.168.0.50:11434
+      # budget/plaid: keys from dashboard.plaid.com (Developers → Keys). Put real
+      # values in a .env next to this compose. URL: sandbox or production.plaid.com
+      - PLAID_CLIENT_ID=${PLAID_CLIENT_ID:-}
+      - PLAID_SECRET=${PLAID_SECRET:-}
+      - PLAID_URL=${PLAID_URL:-https://production.plaid.com}
     networks:
       - internal
 

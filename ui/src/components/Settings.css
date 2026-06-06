@@ -1,0 +1,471 @@
+/* =============================================================================
+   Settings.css — App settings drawer + Plaid connection manager
+   thrive UI
+   ============================================================================= */
+
+.settings-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+}
+
+.settings-drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 300px;
+  background: var(--bg-surface);
+  border-left: 1px solid var(--border);
+  box-shadow: var(--shadow);
+  z-index: 101;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  overflow-y: auto;
+}
+
+.settings-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.settings-title {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.settings-close {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 16px;
+  padding: 4px 8px;
+  border-radius: var(--radius);
+  transition: color 0.15s, background 0.15s;
+}
+
+.settings-close:hover {
+  color: var(--text);
+  background: var(--bg-elevated);
+}
+
+.settings-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.settings-label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+/* ── Slider toggle ──────────────────────────────────────────────────────────── */
+
+.toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.toggle-opt {
+  font-size: 13px;
+  color: var(--text-muted);
+  transition: color 0.15s;
+}
+
+.toggle-opt.active {
+  color: var(--text);
+}
+
+.slider-toggle {
+  position: relative;
+  width: 44px;
+  height: 24px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  transition: background 0.2s, border-color 0.2s;
+  flex-shrink: 0;
+}
+
+.slider-toggle.on {
+  background: var(--accent-dim);
+  border-color: var(--accent);
+}
+
+.slider-knob {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 16px;
+  height: 16px;
+  background: var(--text-muted);
+  border-radius: 50%;
+  transition: transform 0.2s, background 0.2s;
+}
+
+.slider-toggle.on .slider-knob {
+  transform: translateX(20px);
+  background: var(--accent);
+}
+
+/* ── Three-way ──────────────────────────────────────────────────────────────── */
+
+.three-way {
+  display: flex;
+  gap: 4px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 4px;
+}
+
+.three-way-btn {
+  flex: 1;
+  padding: 6px 4px;
+  border: none;
+  border-radius: calc(var(--radius) - 2px);
+  background: transparent;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  transition: background 0.15s, color 0.15s;
+}
+
+.three-way-btn.active {
+  background: var(--bg-surface);
+  color: var(--accent);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+}
+
+.three-way-btn:hover:not(.active) {
+  color: var(--text);
+}
+
+/* ── Plaid section ──────────────────────────────────────────────────────────── */
+
+.plaid-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.plaid-add-btn {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 4px 10px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--accent);
+  transition: background 0.15s, color 0.15s;
+}
+
+.plaid-add-btn:hover {
+  background: var(--accent-dim);
+}
+
+.plaid-empty {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.plaid-error {
+  font-size: 12px;
+  color: var(--danger, #e05c5c);
+  background: rgba(224, 92, 92, 0.08);
+  border: 1px solid rgba(224, 92, 92, 0.2);
+  border-radius: var(--radius);
+  padding: 8px 10px;
+}
+
+
+
+/* ── Connection groups ──────────────────────────────────────────────────────── */
+
+.plaid-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.plaid-group {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.plaid-group-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+.plaid-group-label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--accent);
+}
+
+.plaid-delete-token-btn {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 3px 8px;
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text-muted);
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+
+.plaid-delete-token-btn:hover {
+  color: var(--danger, #e05c5c);
+  border-color: rgba(224, 92, 92, 0.3);
+  background: rgba(224, 92, 92, 0.08);
+}
+
+.plaid-connection-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 7px 10px;
+  gap: 8px;
+}
+
+.plaid-connection-row+.plaid-connection-row {
+  border-top: 1px solid var(--border);
+}
+
+.plaid-account-name {
+  font-size: 12px;
+  color: var(--text);
+}
+
+.plaid-delete-btn {
+  background: none;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  color: var(--text-muted);
+  font-size: 11px;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: color 0.15s, background 0.15s, border-color 0.15s;
+}
+
+.plaid-delete-btn:hover {
+  color: var(--danger, #e05c5c);
+  background: rgba(224, 92, 92, 0.08);
+  border-color: rgba(224, 92, 92, 0.3);
+}
+
+/* ── Add connection form ────────────────────────────────────────────────────── */
+
+.plaid-add-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px;
+}
+
+.plaid-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.plaid-field-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+
+.plaid-token-row {
+  display: flex;
+  gap: 6px;
+}
+
+.plaid-input {
+  flex: 1;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  font-size: 12px;
+  padding: 6px 10px;
+  min-width: 0;
+}
+
+.plaid-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.plaid-fetch-btn {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 6px 12px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--accent);
+  white-space: nowrap;
+  transition: background 0.15s;
+}
+
+.plaid-fetch-btn:hover:not(:disabled) {
+  background: var(--accent-dim);
+}
+
+.plaid-fetch-btn:disabled {
+  opacity: 0.4;
+}
+
+/* ── Account mapping ────────────────────────────────────────────────────────── */
+
+.plaid-mapping {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.plaid-mapping-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.plaid-mapping-plaid {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.plaid-mapping-name {
+  font-size: 12px;
+  color: var(--text);
+}
+
+.plaid-mapping-meta {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  white-space: nowrap;
+}
+
+.plaid-mapping-select {
+  width: 100%;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  font-size: 12px;
+  padding: 5px 8px;
+}
+
+.plaid-save-btn {
+  width: 100%;
+  margin-top: 4px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 8px;
+  background: var(--accent-dim);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+  color: var(--accent);
+  transition: background 0.15s, color 0.15s;
+}
+
+.plaid-save-btn:hover:not(:disabled) {
+  background: var(--accent);
+  color: var(--bg-surface);
+}
+
+.plaid-save-btn:disabled {
+  opacity: 0.4;
+}
+/* ── Connection blocks ──────────────────────────────────────────────────────── */
+
+.conn-block {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px;
+}
+
+.conn-block-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.conn-block-title {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text);
+}
+
+.conn-status {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 2px 8px;
+  border-radius: var(--radius);
+}
+
+.conn-status.connected {
+  color: var(--accent);
+  background: var(--accent-dim);
+  border: 1px solid var(--accent);
+}
+
+.conn-connected-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}

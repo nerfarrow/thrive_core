@@ -16,6 +16,7 @@ import CategoriesPage   from './CategoriesPage'
 import PayeesPage       from './PayeesPage'
 import ScheduledPage    from './ScheduledPage'
 import CategoryBreakdown from './CategoryBreakdown'
+import PlaidPanel        from './PlaidPanel'
 
 // budget stylesheets (monolith CSS + var aliases). budget-theme.css must load
 // first so the aliased variables are defined before the rest reference them.
@@ -35,6 +36,7 @@ const FINANCE_ITEMS = [
   { id: 'categories',   label: 'Categories'   },
   { id: 'payees',       label: 'Payees'       },
   { id: 'scheduled',    label: 'Scheduled'    },
+  { id: 'plaid',        label: 'Plaid'        },
 ]
 
 // ── context sidebar ───────────────────────────────────────────────────────────
@@ -137,6 +139,7 @@ export default function BudgetPage() {
           <Route path="payees"     element={<PayeesPage />} />
           <Route path="scheduled"  element={<ScheduledPage />} />
           <Route path="reports"    element={<CategoryBreakdown />} />
+          <Route path="plaid"      element={<PlaidPanel />} />
           <Route path="*"          element={<Navigate to="accounts" replace />} />
         </Routes>
       </div>
