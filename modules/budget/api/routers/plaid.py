@@ -11,6 +11,8 @@ from typing import Optional
 
 from routers.auth import get_db as _connect
 
+import os, sqlite3
+
 router = APIRouter(prefix="/plaid", tags=["plaid"])
 
 PLAID_CLIENT_ID = os.environ.get("PLAID_CLIENT_ID", "")
@@ -20,7 +22,8 @@ PLAID_URL       = os.environ.get("PLAID_URL", "https://production.plaid.com")
 
 # ── db + money helpers ───────────────────────────────────────────────────────
 def get_db():
-    db = _connect()
+    db = sqlite3.connect(os.environ.get("DB_FILE", "/data/thrivecore.db"), check_same_thread=False)
+    db.row_factory = sqlite3.Row
     db.execute("PRAGMA foreign_keys = ON")
     try:
         yield db

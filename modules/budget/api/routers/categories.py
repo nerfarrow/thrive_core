@@ -9,13 +9,16 @@ import sqlite3
 
 from routers.auth import get_db as _connect
 
+import os, sqlite3
+
 router = APIRouter(prefix="/categories", tags=["categories"])
 
 
 # ── db ─────────────────────────────────────────────────────────────────────
 def get_db():
     """Per-request connection from the platform helper, with FK enforcement."""
-    db = _connect()
+    db = sqlite3.connect(os.environ.get("DB_FILE", "/data/thrivecore.db"), check_same_thread=False)
+    db.row_factory = sqlite3.Row
     db.execute("PRAGMA foreign_keys = ON")
     try:
         yield db
