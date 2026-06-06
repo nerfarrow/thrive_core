@@ -56,6 +56,53 @@ def build_breakdown(rows: list, sign: int) -> list:
     return result
 
 
+@router.get("/category-transactions")
+def category_transactions(
+    range_type: str           = Query("last30", alias="range"),
+    from_date:  Optional[str] = Query(None,     alias="from"),
+    to_date:    Optional[str] = Query(None,     alias="to"),
+    root_id:    int           = Query(...),   # drilled parent (0 = Uncategorized)
+    sub_id:     Optional[int] = Query(None),  # specific category_id to match; omit = whole parent group
+    sign:       int           = Query(-1),    # -1 expense, 1 income
+):
+    """Individual transactions behind a category-breakdown slice. When sub_id is
+    omitted the whole parent group (the parent itself + all its children) is
+    returned; when provided, only that exact category_id (a subcategory, or the
+    parent itself for its 'direct' spend)."""
+    d_from, d_to = resolve_range(range_type, from_date, to_date)
+
+    where  = ["t.date >= ?", "t.date <= ?", "t.transfer_account_id IS NULL"]
+    params = [d_from, d_to]
+    where.append("t.amount_cents > 0" if sign == 1 else "t.amount_cents < 0")
+
+    if sub_id is not None:
+        if sub_id == 0:
+            where.append("t.category_id IS NULL")
+        else:
+            where.append("t.category_id = ?"); params.append(sub_id)
+    else:
+        if root_id == 0:
+            where.append("t.category_id IS NULL")
+        else:
+            where.append("(t.category_id = ? OR cat.parent_id = ?)"); params.extend([root_id, root_id])
+
+    conn = get_db()
+    try:
+        rows = conn.execute(f"""
+            SELECT t.id, t.date, t.amount_cents,
+                   COALESCE(p.name, '—')             AS payee,
+                   COALESCE(cat.name, 'Uncategorized') AS category_name
+            FROM transactions t
+            LEFT JOIN categories cat ON cat.id = t.category_id
+            LEFT JOIN payees     p   ON p.id   = t.payee_id
+            WHERE {' AND '.join(where)}
+            ORDER BY t.date DESC, t.id DESC
+        """, params).fetchall()
+    finally:
+        conn.close()
+    return [dict(r) for r in rows]
+
+
 @router.get("/category-breakdown")
 def category_breakdown(
     range_type: str          = Query("last30", alias="range"),

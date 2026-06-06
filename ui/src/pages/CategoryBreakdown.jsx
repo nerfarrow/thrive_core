@@ -17,6 +17,10 @@ const fmtUSD = (cents) =>
   "$" + (Math.abs(cents) / 100).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const fmtPct = (part, total) =>
   total ? ((part / total) * 100).toFixed(1) + "%" : "0%";
+const shortDate = (iso) => {
+  const [, m, d] = (iso || "").split("-");
+  return m && d ? `${m}/${d}` : iso;
+};
 
 // ── SVG donut helpers ────────────────────────────────────────────────────────
 const CX = 150, CY = 150;
@@ -41,8 +45,29 @@ function arc(rOut, rIn, a1, a2) {
 }
 
 // ── donut chart ──────────────────────────────────────────────────────────────
-function DonutChart({ categories, totalCents, title }) {
-  const [hov, setHov] = useState(null); // {name, total_cents, pct}
+function DonutChart({ categories, totalCents, title, sign = -1, rangeQS = "" }) {
+  const [hov,     setHov]     = useState(null);  // { key, name, total_cents, pct }
+  const [drillId, setDrillId] = useState(null);  // parent category id we've zoomed into
+  const [subSel,  setSubSel]  = useState(null);  // { catId, name } subcategory filter within a drill
+  const [txns,       setTxns]       = useState([]);
+  const [txnLoading, setTxnLoading] = useState(false);
+
+  const enter = (cat)  => { setDrillId(cat); setSubSel(null); setHov(null); };
+  const back  = ()     => { setDrillId(null); setSubSel(null); setHov(null); };
+
+  // fetch the individual transactions behind the drilled category (or sub-filter)
+  useEffect(() => {
+    if (drillId == null) { setTxns([]); return; }
+    let cancelled = false;
+    setTxnLoading(true);
+    let qs = `${rangeQS}&root_id=${drillId}&sign=${sign}`;
+    if (subSel) qs += `&sub_id=${subSel.catId}`;
+    api.get(`/reports/category-transactions?${qs}`)
+      .then(rows => { if (!cancelled) setTxns(rows); })
+      .catch(() => { if (!cancelled) setTxns([]); })
+      .finally(() => { if (!cancelled) setTxnLoading(false); });
+    return () => { cancelled = true; };
+  }, [drillId, subSel, rangeQS, sign]);
 
   if (!categories.length) {
     return (
@@ -52,117 +77,245 @@ function DonutChart({ categories, totalCents, title }) {
     );
   }
 
-  const total = totalCents || categories.reduce((s, c) => s + c.total_cents, 0);
+  const grandTotal = totalCents || categories.reduce((s, c) => s + c.total_cents, 0);
+  const drillCat   = drillId != null ? categories.find(c => c.id === drillId) : null;
+  // drilling only makes sense when the parent has children to expand into
+  const canDrill   = (cat) => cat.subcategories.length > 0;
 
   // ── build slice data ──
-  const outerSlices = []; // { path, color, cat, startDeg, endDeg }
-  const innerSlices = []; // { path, color, cat, sub, isDirectSpend }
-  let cursor = 0;
+  const slices = []; // { key, path, color, fillOpacity, name, total_cents, onClick }
 
-  categories.forEach((cat, ci) => {
-    const sweep = (cat.total_cents / total) * 360;
-    const a1 = cursor, a2 = cursor + sweep;
-    const c = color(ci);
-    outerSlices.push({ path: arc(O_OUT, O_IN, a1, a2), color: c, cat, a1, a2 });
+  if (drillCat) {
+    // DRILL MODE — one bold ring of this parent's subcategories filling the donut;
+    // clicking a slice filters the transaction list below to that subcategory.
+    const subTotal     = drillCat.subcategories.reduce((s, x) => s + x.total_cents, 0);
+    const directSpend  = drillCat.total_cents - subTotal;
+    const items = [];
+    if (directSpend > 0) items.push({ catId: drillCat.id, name: drillCat.name + " (direct)", total_cents: directSpend });
+    drillCat.subcategories.forEach(sub => items.push({ catId: sub.id, name: sub.name, total_cents: sub.total_cents }));
 
-    if (cat.subcategories.length === 0) {
-      // no real subs — fill inner ring with the same category (lighter)
-      innerSlices.push({ path: arc(I_OUT, I_IN, a1, a2), color: c, cat, sub: null, opacity: 0.45 });
-    } else {
-      let subCursor = a1;
-      const subTotal = cat.subcategories.reduce((s, x) => s + x.total_cents, 0);
-      const directSpend = cat.total_cents - subTotal;
-
-      // direct-spend slice if any
-      if (directSpend > 0) {
-        const subSweep = (directSpend / cat.total_cents) * sweep;
-        innerSlices.push({ path: arc(I_OUT, I_IN, subCursor, subCursor + subSweep), color: c, cat, sub: { name: cat.name + " (direct)", total_cents: directSpend }, opacity: 0.35 });
-        subCursor += subSweep;
-      }
-
-      cat.subcategories.forEach((sub) => {
-        const subSweep = (sub.total_cents / cat.total_cents) * sweep;
-        innerSlices.push({ path: arc(I_OUT, I_IN, subCursor, subCursor + subSweep), color: c, cat, sub, opacity: 0.75 });
-        subCursor += subSweep;
+    let cur = 0;
+    items.forEach((it, i) => {
+      const sweep = (it.total_cents / drillCat.total_cents) * 360;
+      const sel = subSel && subSel.catId === it.catId;
+      slices.push({
+        key: `d-${it.catId}`, catId: it.catId,
+        path: arc(O_OUT, I_IN, cur, cur + sweep),  // full thickness
+        color: color(i), fillOpacity: 1, selected: !!sel,
+        name: it.name, total_cents: it.total_cents,
+        onClick: () => setSubSel(prev => (prev && prev.catId === it.catId) ? null : { catId: it.catId, name: it.name }),
       });
-    }
-    cursor = a2;
-  });
+      cur += sweep;
+    });
+  } else {
+    // OVERVIEW MODE — outer = parents, inner = subcategories
+    let cursor = 0;
+    categories.forEach((cat, ci) => {
+      const sweep = (cat.total_cents / grandTotal) * 360;
+      const a1 = cursor, a2 = cursor + sweep;
+      const c = color(ci);
+      const drillable = canDrill(cat);
+      slices.push({
+        key: `cat-${cat.id}`, ring: "outer",
+        path: arc(O_OUT, O_IN, a1, a2), color: c, fillOpacity: 1,
+        name: cat.name, total_cents: cat.total_cents,
+        onClick: drillable ? () => enter(cat.id) : undefined,
+      });
 
-  const centerText = hov ? hov : { name: title, total_cents: total, pct: null };
+      if (cat.subcategories.length === 0) {
+        slices.push({ key: `sub-${cat.id}`, path: arc(I_OUT, I_IN, a1, a2), color: c, fillOpacity: 0.45,
+          name: cat.name, total_cents: cat.total_cents });
+      } else {
+        let subCursor = a1;
+        const subTotal    = cat.subcategories.reduce((s, x) => s + x.total_cents, 0);
+        const directSpend = cat.total_cents - subTotal;
+        if (directSpend > 0) {
+          const ss = (directSpend / cat.total_cents) * sweep;
+          slices.push({ key: `sub-${cat.id}-direct`, path: arc(I_OUT, I_IN, subCursor, subCursor + ss), color: c, fillOpacity: 0.35,
+            name: cat.name + " (direct)", total_cents: directSpend,
+            onClick: () => enter(cat.id) });
+          subCursor += ss;
+        }
+        cat.subcategories.forEach(sub => {
+          const ss = (sub.total_cents / cat.total_cents) * sweep;
+          slices.push({ key: `sub-${sub.id}`, path: arc(I_OUT, I_IN, subCursor, subCursor + ss), color: c, fillOpacity: 0.75,
+            name: sub.name, total_cents: sub.total_cents,
+            onClick: () => enter(cat.id) });
+          subCursor += ss;
+        });
+      }
+      cursor = a2;
+    });
+  }
+
+  // center readout: hovered slice → selected sub → drilled parent → whole total
+  const selSlice = subSel ? slices.find(s => s.selected) : null;
+  const centerText = hov
+    ? hov
+    : selSlice
+      ? { name: subSel.name, total_cents: selSlice.total_cents, pct: fmtPct(selSlice.total_cents, grandTotal) }
+      : drillCat
+        ? { name: drillCat.name, total_cents: drillCat.total_cents, pct: fmtPct(drillCat.total_cents, grandTotal) }
+        : { name: title, total_cents: grandTotal, pct: null };
+
+  // legend rows: drilled parent's children, or all parents
+  const legendCats = drillCat ? [drillCat] : categories;
+
+  // only dim siblings when the hovered thing actually corresponds to a slice
+  const hovOnChart = hov && slices.some(s => s.key === hov.key);
 
   return (
     <div>
-      {/* chart */}
       <svg viewBox="0 0 300 300" style={{ width: "100%", maxWidth: 300, display: "block", margin: "0 auto" }}>
-        {/* outer ring */}
-        {outerSlices.map((s, i) => (
-          <path key={`o${i}`} d={s.path} fill={s.color}
-            stroke="var(--bg-primary,#0f0f0f)" strokeWidth="1.5"
-            style={{ cursor: "pointer", transition: "opacity 0.15s" }}
-            opacity={hov && hov !== s.catHov ? 0.65 : 1}
-            onMouseEnter={() => setHov({ name: s.cat.name, total_cents: s.cat.total_cents, pct: fmtPct(s.cat.total_cents, total) })}
-            onMouseLeave={() => setHov(null)}
-          />
-        ))}
-        {/* inner ring */}
-        {innerSlices.map((s, i) => (
-          <path key={`i${i}`} d={s.path} fill={s.color}
-            fillOpacity={s.opacity}
-            stroke="var(--bg-primary,#0f0f0f)" strokeWidth="1"
-            style={{ cursor: "pointer" }}
-            onMouseEnter={() => {
-              const item = s.sub || s.cat;
-              setHov({ name: item.name, total_cents: item.total_cents, pct: fmtPct(item.total_cents, total) });
-            }}
-            onMouseLeave={() => setHov(null)}
-          />
-        ))}
-        {/* center text */}
-        <text x={CX} y={CY - 10} textAnchor="middle"
-          style={{ fill: "var(--text-tertiary,#888)", fontSize: 10, fontFamily: "monospace", textTransform: "uppercase" }}>
-          {centerText.pct ? centerText.pct : title.split(" ")[0]}
-        </text>
-        <text x={CX} y={CY + 12} textAnchor="middle"
-          style={{ fill: "var(--text-primary,#e8e6e0)", fontSize: 18, fontWeight: 600, fontFamily: "monospace" }}>
-          {fmtUSD(centerText.total_cents)}
-        </text>
-        <text x={CX} y={CY + 30} textAnchor="middle"
-          style={{ fill: "var(--text-secondary,#aaa)", fontSize: 10, fontFamily: "var(--font-body)" }}>
-          {centerText.name.length > 22 ? centerText.name.slice(0, 22) + "…" : centerText.name}
-        </text>
+        {slices.map(s => {
+          const dim = hovOnChart ? hov.key !== s.key : (subSel ? !s.selected : false);
+          return (
+            <path key={s.key} d={s.path} fill={s.color} fillOpacity={s.fillOpacity}
+              stroke={s.selected ? "var(--text-primary,#e8e6e0)" : "var(--bg-primary,#0f0f0f)"}
+              strokeWidth={s.selected ? 2.5 : 1.5}
+              style={{ cursor: s.onClick ? "pointer" : "default", transition: "opacity 0.15s" }}
+              opacity={dim ? 0.4 : 1}
+              onMouseEnter={() => setHov({ key: s.key, name: s.name, total_cents: s.total_cents, pct: fmtPct(s.total_cents, grandTotal) })}
+              onMouseLeave={() => setHov(null)}
+              onClick={s.onClick}
+            />
+          );
+        })}
+
+        {/* center — clickable to pop back up one level when drilled */}
+        <g style={{ cursor: drillCat ? "pointer" : "default" }}
+          onClick={drillCat ? (subSel ? () => setSubSel(null) : back) : undefined}>
+          {/* invisible hit target over the donut hole */}
+          <circle cx={CX} cy={CY} r={I_IN} fill="transparent" />
+          {drillCat && (
+            <text x={CX} y={CY - 26} textAnchor="middle"
+              style={{ fill: "var(--text-tertiary,#888)", fontSize: 9, fontFamily: "monospace", letterSpacing: "0.1em" }}>
+              {subSel ? "✕ CLEAR" : "← BACK"}
+            </text>
+          )}
+          <text x={CX} y={CY - 10} textAnchor="middle"
+            style={{ fill: "var(--text-tertiary,#888)", fontSize: 10, fontFamily: "monospace", textTransform: "uppercase" }}>
+            {centerText.pct ? centerText.pct : title.split(" ")[0]}
+          </text>
+          <text x={CX} y={CY + 12} textAnchor="middle"
+            style={{ fill: "var(--text-primary,#e8e6e0)", fontSize: 18, fontWeight: 600, fontFamily: "monospace" }}>
+            {fmtUSD(centerText.total_cents)}
+          </text>
+          <text x={CX} y={CY + 30} textAnchor="middle"
+            style={{ fill: "var(--text-secondary,#aaa)", fontSize: 10, fontFamily: "var(--font-body)" }}>
+            {centerText.name.length > 22 ? centerText.name.slice(0, 22) + "…" : centerText.name}
+          </text>
+        </g>
       </svg>
 
-      {/* legend */}
-      <div style={{ marginTop: 10, maxHeight: 220, overflowY: "auto" }}>
-        {categories.map((cat, ci) => (
-          <div key={cat.id}
-            style={{ padding: "5px 0", borderBottom: "1px solid var(--border-color,#222)", cursor: "pointer" }}
-            onMouseEnter={() => setHov({ name: cat.name, total_cents: cat.total_cents, pct: fmtPct(cat.total_cents, total) })}
-            onMouseLeave={() => setHov(null)}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <span style={{ width: 10, height: 10, borderRadius: 2, background: color(ci), flexShrink: 0, display: "inline-block" }} />
-              <span style={{ flex: 1, fontSize: 12, color: "var(--text-secondary,#ccc)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{cat.name}</span>
-              <span style={{ fontSize: 11, color: "var(--text-tertiary,#888)", fontFamily: "monospace", flexShrink: 0 }}>{fmtPct(cat.total_cents, total)}</span>
-              <span style={{ fontSize: 12, fontFamily: "monospace", color: "var(--text-primary,#e8e6e0)", flexShrink: 0 }}>{fmtUSD(cat.total_cents)}</span>
-            </div>
-            {cat.subcategories.length > 0 && (
-              <div style={{ marginLeft: 18, marginTop: 2 }}>
-                {cat.subcategories.map(sub => (
-                  <div key={sub.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "2px 0" }}
-                    onMouseEnter={e => { e.stopPropagation(); setHov({ name: sub.name, total_cents: sub.total_cents, pct: fmtPct(sub.total_cents, total) }); }}
-                    onMouseLeave={e => { e.stopPropagation(); setHov(null); }}>
-                    <span style={{ width: 6, height: 6, borderRadius: 1, background: color(ci), opacity: 0.6, flexShrink: 0, display: "inline-block" }} />
-                    <span style={{ flex: 1, fontSize: 11, color: "var(--text-tertiary,#999)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{sub.name}</span>
-                    <span style={{ fontSize: 10, color: "var(--text-tertiary,#888)", fontFamily: "monospace", flexShrink: 0 }}>{fmtPct(sub.total_cents, total)}</span>
-                    <span style={{ fontSize: 11, fontFamily: "monospace", color: "var(--text-secondary,#bbb)", flexShrink: 0 }}>{fmtUSD(sub.total_cents)}</span>
-                  </div>
-                ))}
-              </div>
-            )}
+      {/* breadcrumb when drilled */}
+      {drillCat && (
+        <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, fontFamily: "monospace", margin: "6px 0 2px", color: "var(--text-tertiary,#888)" }}>
+          <button onClick={back}
+            style={{ background: "none", border: "none", color: "var(--text-secondary,#aaa)", cursor: "pointer", padding: 0, fontFamily: "inherit", fontSize: 11 }}>
+            {title}
+          </button>
+          <span>/</span>
+          {subSel ? (
+            <>
+              <button onClick={() => setSubSel(null)}
+                style={{ background: "none", border: "none", color: "var(--text-secondary,#aaa)", cursor: "pointer", padding: 0, fontFamily: "inherit", fontSize: 11 }}>
+                {drillCat.name}
+              </button>
+              <span>/</span>
+              <span style={{ color: "var(--text-primary,#e8e6e0)" }}>{subSel.name}</span>
+              <button onClick={() => setSubSel(null)} title="Clear filter"
+                style={{ background: "none", border: "none", color: "var(--text-tertiary,#888)", cursor: "pointer", padding: "0 0 0 2px", fontFamily: "inherit", fontSize: 11 }}>✕</button>
+            </>
+          ) : (
+            <span style={{ color: "var(--text-primary,#e8e6e0)" }}>{drillCat.name}</span>
+          )}
+        </div>
+      )}
+
+      {drillCat ? (
+        <>
+          {/* subcategory filter list (mirrors the donut slices) */}
+          <div style={{ marginTop: 8, maxHeight: 130, overflowY: "auto" }}>
+            {slices.map(s => {
+              const sel = subSel && subSel.catId === s.catId;
+              return (
+                <div key={s.key}
+                  onMouseEnter={() => setHov({ key: s.key, name: s.name, total_cents: s.total_cents, pct: fmtPct(s.total_cents, grandTotal) })}
+                  onMouseLeave={() => setHov(null)}
+                  onClick={() => setSubSel(sel ? null : { catId: s.catId, name: s.name })}
+                  style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 0", cursor: "pointer",
+                    borderBottom: "1px solid var(--border-color,#222)", opacity: subSel && !sel ? 0.5 : 1 }}>
+                  <span style={{ width: 10, height: 10, borderRadius: 2, background: s.color, flexShrink: 0, display: "inline-block", outline: sel ? "1.5px solid var(--text-primary,#e8e6e0)" : "none", outlineOffset: 1 }} />
+                  <span style={{ flex: 1, fontSize: 12, color: "var(--text-secondary,#ccc)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.name}</span>
+                  <span style={{ fontSize: 11, color: "var(--text-tertiary,#888)", fontFamily: "monospace", flexShrink: 0 }}>{fmtPct(s.total_cents, grandTotal)}</span>
+                  <span style={{ fontSize: 12, fontFamily: "monospace", color: "var(--text-primary,#e8e6e0)", flexShrink: 0 }}>{fmtUSD(s.total_cents)}</span>
+                </div>
+              );
+            })}
           </div>
-        ))}
-      </div>
+
+          {/* individual transactions behind the current view */}
+          <div style={{ marginTop: 10 }}>
+            <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: "0.1em", color: "var(--text-tertiary,#666)", marginBottom: 4 }}>
+              {txnLoading ? "Loading…" : `${txns.length} transaction${txns.length === 1 ? "" : "s"}`}{subSel ? ` · ${subSel.name}` : ""}
+            </div>
+            <div style={{ maxHeight: 240, overflowY: "auto" }}>
+              {txns.map(t => (
+                <div key={t.id} style={{ display: "grid", gridTemplateColumns: "46px 1fr auto", gap: 8, alignItems: "baseline", padding: "3px 0", borderBottom: "1px solid var(--border-color,#1b1b1b)" }}>
+                  <span style={{ fontSize: 11, color: "var(--text-tertiary,#888)", fontFamily: "monospace" }}>{shortDate(t.date)}</span>
+                  <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    <span style={{ fontSize: 12, color: "var(--text-secondary,#ccc)" }}>{t.payee}</span>
+                    <span style={{ fontSize: 11, color: "var(--text-tertiary,#666)", marginLeft: 6 }}>{t.category_name}</span>
+                  </span>
+                  <span style={{ fontSize: 12, fontFamily: "monospace", color: "var(--text-primary,#e8e6e0)" }}>{fmtUSD(t.amount_cents)}</span>
+                </div>
+              ))}
+              {!txnLoading && txns.length === 0 && (
+                <div style={{ fontSize: 11, color: "var(--text-tertiary,#666)", padding: "8px 0" }}>No transactions</div>
+              )}
+            </div>
+          </div>
+        </>
+      ) : (
+        /* overview legend — parents (+ subs), click a parent to drill in */
+        <div style={{ marginTop: 10, maxHeight: 220, overflowY: "auto" }}>
+          {legendCats.map((cat) => {
+            const ci = categories.indexOf(cat);
+            const drillable = canDrill(cat);
+            return (
+              <div key={cat.id}
+                style={{ padding: "5px 0", borderBottom: "1px solid var(--border-color,#222)", cursor: drillable ? "pointer" : "default" }}
+                onMouseEnter={() => setHov({ key: `cat-${cat.id}`, name: cat.name, total_cents: cat.total_cents, pct: fmtPct(cat.total_cents, grandTotal) })}
+                onMouseLeave={() => setHov(null)}
+                onClick={drillable ? () => enter(cat.id) : undefined}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ width: 10, height: 10, borderRadius: 2, background: color(ci), flexShrink: 0, display: "inline-block" }} />
+                  <span style={{ flex: 1, fontSize: 12, color: "var(--text-secondary,#ccc)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {cat.name}{drillable && <span style={{ color: "var(--text-tertiary,#666)", marginLeft: 6 }}>▸</span>}
+                  </span>
+                  <span style={{ fontSize: 11, color: "var(--text-tertiary,#888)", fontFamily: "monospace", flexShrink: 0 }}>{fmtPct(cat.total_cents, grandTotal)}</span>
+                  <span style={{ fontSize: 12, fontFamily: "monospace", color: "var(--text-primary,#e8e6e0)", flexShrink: 0 }}>{fmtUSD(cat.total_cents)}</span>
+                </div>
+                {cat.subcategories.length > 0 && (
+                  <div style={{ marginLeft: 18, marginTop: 2 }}>
+                    {cat.subcategories.map((sub) => (
+                      <div key={sub.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "2px 0" }}
+                        onMouseEnter={e => { e.stopPropagation(); setHov({ key: `sub-${sub.id}`, name: sub.name, total_cents: sub.total_cents, pct: fmtPct(sub.total_cents, grandTotal) }); }}
+                        onMouseLeave={e => { e.stopPropagation(); setHov(null); }}>
+                        <span style={{ width: 6, height: 6, borderRadius: 1, background: color(ci), opacity: 0.6, flexShrink: 0, display: "inline-block" }} />
+                        <span style={{ flex: 1, fontSize: 11, color: "var(--text-tertiary,#999)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{sub.name}</span>
+                        <span style={{ fontSize: 10, color: "var(--text-tertiary,#888)", fontFamily: "monospace", flexShrink: 0 }}>{fmtPct(sub.total_cents, grandTotal)}</span>
+                        <span style={{ fontSize: 11, fontFamily: "monospace", color: "var(--text-secondary,#bbb)", flexShrink: 0 }}>{fmtUSD(sub.total_cents)}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
@@ -218,6 +371,7 @@ export default function CategoryBreakdown() {
   }, [load, rangeType, fromDate, toDate]);
 
   const card = { background: "var(--bg-secondary,#181818)", border: "1px solid var(--border-color,#2a2a2a)", borderRadius: 10 };
+  const rangeQS = rangeType === "custom" ? `range=custom&from=${fromDate}&to=${toDate}` : `range=${rangeType}`;
 
   return (
     <div style={{ padding: "1.5rem 1.5rem 3rem", maxWidth: 900, margin: "0 auto" }}>
@@ -249,6 +403,8 @@ export default function CategoryBreakdown() {
                   categories={data.expenses.categories}
                   totalCents={data.expenses.total_cents}
                   title="Spending"
+                  sign={-1}
+                  rangeQS={rangeQS}
                 />
               </div>
             </div>
@@ -261,6 +417,8 @@ export default function CategoryBreakdown() {
                   categories={data.income.categories}
                   totalCents={data.income.total_cents}
                   title="Income"
+                  sign={1}
+                  rangeQS={rangeQS}
                 />
               </div>
             </div>
