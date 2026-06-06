@@ -40,12 +40,28 @@ services:
     volumes:
       - ./data/vault:/data
     environment:
-      - DOMAIN=http://192.168.0.157:9500/vault   # must match how you reach the app
+      - DOMAIN=https://test.nerfarrow.com/vault   # public URL via Cloudflare Tunnel
       - ROCKET_PORT=8222
       - WEB_VAULT_ENABLED=true
       - SIGNUPS_ALLOWED=true   # set false after you create your account
     networks:
       - internal
+
+  # Cloudflare Tunnel — exposes the app at https://test.nerfarrow.com with a real
+  # cert (no port-forwarding). HTTPS is REQUIRED for the vault (Web Crypto needs a
+  # secure context). Create a tunnel in the Cloudflare Zero Trust dashboard, set a
+  # public hostname → http://thrivecore_ui:80, and put the token in TUNNEL_TOKEN
+  # (e.g. a .env file next to this compose). Remove this service to go LAN-only.
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: thrivecore_cloudflared
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run --token ${TUNNEL_TOKEN:-}
+    depends_on:
+      - ui
+    networks:
+      - internal
+    profiles: ["tunnel"]   # opt-in: docker compose --profile tunnel up -d
 
 networks:
   internal:

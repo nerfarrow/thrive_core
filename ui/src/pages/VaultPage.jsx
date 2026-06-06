@@ -97,6 +97,12 @@ export default function VaultPage() {
               <button style={{ ...btnPrimary, opacity: connecting ? 0.5 : 1 }} onClick={connect} disabled={connecting}>
                 {connecting ? 'Connecting…' : '🔑 Connect Vault'}
               </button>
+              <div style={{ marginTop: 16, paddingTop: 14, borderTop: '1px solid var(--border-color,#2a2a2a)', fontSize: 12, color: 'var(--text-tertiary,#888)' }}>
+                No vault account yet? This connects to your self-hosted Vaultwarden — create an account there first, then connect here with the same email + master password.
+                <div style={{ marginTop: 10 }}>
+                  <button style={btnSecondary} onClick={() => window.open(`${VAULT_BASE}/`, '_blank')}>Open Vaultwarden ↗</button>
+                </div>
+              </div>
             </div>
           )}
         </div>
