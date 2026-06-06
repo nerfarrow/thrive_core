@@ -27,6 +27,15 @@ export default function PlaidPanel() {
   const [saving,        setSaving]         = useState(false)
   const [error,         setError]          = useState(null)
 
+  // ── API credentials (DB-backed; set right here, no file editing) ──
+  const [cid,        setCid]        = useState('')
+  const [secret,     setSecret]     = useState('')
+  const [url,        setUrl]        = useState('https://production.plaid.com')
+  const [secretSet,  setSecretSet]  = useState(false)
+  const [configured, setConfigured] = useState(false)
+  const [cfgSaving,  setCfgSaving]  = useState(false)
+  const [cfgMsg,     setCfgMsg]     = useState(null)
+
   const loadConnections = async () => {
     try { setConnections(await api.get('/plaid/connections')) }
     catch { setError('Failed to load connections') }
@@ -34,7 +43,27 @@ export default function PlaidPanel() {
   const loadNbAccounts = async () => {
     try { setNbAccounts(await api.get('/budget/accounts/')) } catch {}
   }
-  useEffect(() => { loadConnections(); loadNbAccounts() }, [])
+  const loadConfig = async () => {
+    try {
+      const c = await api.get('/plaid/config')
+      setCid(c.client_id || '')
+      setUrl(c.url || 'https://production.plaid.com')
+      setSecretSet(!!c.secret_set); setConfigured(!!c.configured)
+    } catch {}
+  }
+  useEffect(() => { loadConnections(); loadNbAccounts(); loadConfig() }, [])
+
+  const saveConfig = async () => {
+    setCfgSaving(true); setCfgMsg(null)
+    try {
+      const body = { client_id: cid.trim(), url: url.trim() }
+      if (secret.trim()) body.secret = secret.trim()
+      const c = await api.post('/plaid/config', body)
+      setSecret(''); setSecretSet(!!c.secret_set); setConfigured(!!c.configured)
+      setCfgMsg('Saved ✓')
+    } catch (e) { setCfgMsg(e.message || 'Failed to save') }
+    finally { setCfgSaving(false) }
+  }
 
   const handleFetchAccounts = async () => {
     if (!tokenInput.trim()) return
@@ -90,6 +119,35 @@ export default function PlaidPanel() {
       <div style={{ marginBottom: '1.5rem' }}>
         <h1 style={{ fontSize: 14, fontWeight: 500, letterSpacing: '0.15em', textTransform: 'uppercase', margin: 0 }}>Plaid</h1>
         <p style={{ fontSize: 12, color: 'var(--text-tertiary,#888)', marginTop: 4 }}>Bank connections — paste an access token, map its accounts</p>
+      </div>
+
+      {/* API credentials — get these from dashboard.plaid.com → Developers → Keys */}
+      <div className="conn-block" style={{ marginBottom: 12 }}>
+        <div className="conn-block-header">
+          <span className="conn-block-title">🔧 Plaid API credentials</span>
+          {configured && <span className="conn-status connected">Configured</span>}
+        </div>
+        <div className="plaid-add-form">
+          <div className="plaid-field">
+            <label className="plaid-field-label">Client ID</label>
+            <input className="plaid-input" type="text" placeholder="dashboard.plaid.com → Developers → Keys"
+              value={cid} onChange={e => setCid(e.target.value)} />
+          </div>
+          <div className="plaid-field">
+            <label className="plaid-field-label">Secret{secretSet ? ' (set — leave blank to keep)' : ''}</label>
+            <input className="plaid-input" type="password" placeholder={secretSet ? '••••••••' : 'plaid secret'}
+              value={secret} onChange={e => setSecret(e.target.value)} />
+          </div>
+          <div className="plaid-field">
+            <label className="plaid-field-label">Environment URL</label>
+            <input className="plaid-input" type="text" placeholder="https://production.plaid.com"
+              value={url} onChange={e => setUrl(e.target.value)} />
+          </div>
+          <button className="plaid-save-btn" onClick={saveConfig} disabled={cfgSaving}>
+            {cfgSaving ? 'Saving…' : 'Save credentials'}
+          </button>
+          {cfgMsg && <div className="plaid-empty" style={{ marginTop: 6 }}>{cfgMsg}</div>}
+        </div>
       </div>
 
       <div className="conn-block">

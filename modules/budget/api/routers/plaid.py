@@ -49,11 +49,51 @@ def init_db():
                 created_at       TEXT DEFAULT (datetime('now'))
             )
         """)
+        db.execute("""
+            CREATE TABLE IF NOT EXISTS plaid_config (
+                key        TEXT PRIMARY KEY,
+                value      TEXT,
+                updated_at TEXT DEFAULT (datetime('now'))
+            )
+        """)
         db.commit()
     finally:
         db.close()
 
 init_db()
+
+
+# ── config (DB-backed Plaid credentials; falls back to env) ──────────────────
+def _cfg(key: str, env_default: str = "") -> str:
+    conn = sqlite3.connect(os.environ.get("DB_FILE", "/data/thrivecore.db"))
+    conn.row_factory = sqlite3.Row
+    try:
+        row = conn.execute("SELECT value FROM plaid_config WHERE key=?", (key,)).fetchone()
+    finally:
+        conn.close()
+    if row and row["value"]:
+        return row["value"]
+    return env_default
+
+def _set_cfg(key: str, value: str):
+    conn = sqlite3.connect(os.environ.get("DB_FILE", "/data/thrivecore.db"))
+    try:
+        conn.execute(
+            """INSERT INTO plaid_config (key, value, updated_at) VALUES (?, ?, datetime('now'))
+               ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=datetime('now')""",
+            (key, value)
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+def _creds():
+    """Effective Plaid creds: DB config overrides env defaults."""
+    return (
+        _cfg("client_id", PLAID_CLIENT_ID),
+        _cfg("secret",    PLAID_SECRET),
+        _cfg("url",       PLAID_URL),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -83,10 +123,13 @@ class SyncRequest(BaseModel):
 
 def _plaid_post(endpoint: str, body: dict) -> dict:
     """POST to Plaid API, raise on error."""
-    body["client_id"] = PLAID_CLIENT_ID
-    body["secret"]    = PLAID_SECRET
+    client_id, secret, url = _creds()
+    if not (client_id and secret):
+        raise HTTPException(status_code=400, detail="Plaid not configured — set Client ID and Secret in the Plaid panel")
+    body["client_id"] = client_id
+    body["secret"]    = secret
     res = requests.post(
-        f"{PLAID_URL}{endpoint}",
+        f"{url}{endpoint}",
         json=body,
         timeout=30
     )
@@ -153,10 +196,44 @@ def _find_match(account_id: int, amount_cents: int, date: str, db) -> Optional[i
 # Routes
 # ---------------------------------------------------------------------------
 
+class PlaidConfigIn(BaseModel):
+    client_id: Optional[str] = None
+    secret:    Optional[str] = None
+    url:       Optional[str] = None
+
+
 @router.get("/status")
 def plaid_status():
-    """Whether Plaid API credentials are configured — drives showing the panel."""
-    return {"configured": bool(PLAID_CLIENT_ID and PLAID_SECRET)}
+    """Whether Plaid API credentials are configured."""
+    client_id, secret, _ = _creds()
+    return {"configured": bool(client_id and secret)}
+
+
+@router.get("/config")
+def get_plaid_config():
+    """Current Plaid credential state (secret is never returned, only whether set)."""
+    client_id, secret, url = _creds()
+    return {
+        "client_id":  client_id,
+        "secret_set": bool(secret),
+        "url":        url,
+        "configured": bool(client_id and secret),
+    }
+
+
+@router.post("/config")
+def set_plaid_config(body: PlaidConfigIn):
+    """Save Plaid credentials. Only non-empty fields are updated (so you can
+    change the URL without re-entering the secret)."""
+    if body.client_id is not None and body.client_id.strip():
+        _set_cfg("client_id", body.client_id.strip())
+    if body.secret is not None and body.secret.strip():
+        _set_cfg("secret", body.secret.strip())
+    if body.url is not None and body.url.strip():
+        _set_cfg("url", body.url.strip())
+    client_id, secret, url = _creds()
+    return {"client_id": client_id, "secret_set": bool(secret), "url": url,
+            "configured": bool(client_id and secret)}
 
 
 @router.post("/connections", status_code=201)

@@ -36,6 +36,7 @@ const FINANCE_ITEMS = [
   { id: 'categories',   label: 'Categories'   },
   { id: 'payees',       label: 'Payees'       },
   { id: 'scheduled',    label: 'Scheduled'    },
+  { id: 'plaid',        label: 'Plaid'        },
 ]
 
 // ── context sidebar ───────────────────────────────────────────────────────────
@@ -45,12 +46,8 @@ function BudgetSidebar({ refreshKey }) {
   const [accounts,     setAccounts]     = useState([])
   const [accountsOpen, setAccountsOpen] = useState(true)
   const [reportsOpen,  setReportsOpen]  = useState(false)
-  const [plaidOn,      setPlaidOn]      = useState(false)   // only show Plaid when configured
 
   useEffect(() => { api.get('/budget/accounts/').then(setAccounts).catch(() => {}) }, [refreshKey])
-  useEffect(() => { api.get('/plaid/status').then(s => setPlaidOn(!!s.configured)).catch(() => {}) }, [])
-
-  const items = plaidOn ? [...FINANCE_ITEMS, { id: 'plaid', label: 'Plaid' }] : FINANCE_ITEMS
 
   return (
     <div style={{
@@ -90,7 +87,7 @@ function BudgetSidebar({ refreshKey }) {
       </div>
 
       {/* other finance sections */}
-      {items.map(item => (
+      {FINANCE_ITEMS.map(item => (
         <div key={item.id} className="nav-section">
           <button className={`nav-item ${path.startsWith(`/budget/${item.id}`) ? 'active' : ''}`}
             onClick={() => navigate(`/budget/${item.id}`)}>{item.label}</button>
