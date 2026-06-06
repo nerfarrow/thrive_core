@@ -15,3 +15,4 @@ modules/*
 !modules/home/
 !modules/vehicles/
 !modules/budget/
+!modules/vault/

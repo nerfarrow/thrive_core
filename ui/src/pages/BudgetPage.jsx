@@ -9,6 +9,7 @@
 import { useState, useEffect } from 'react'
 import { Routes, Route, Navigate, useNavigate, useLocation, useSearchParams } from 'react-router-dom'
 import { api } from '../api'
+import { useVault } from '../context/VaultContext'
 import AccountsPage     from './AccountsPage'
 import TransactionsPage from './TransactionsPage'
 import CategoriesPage   from './CategoriesPage'
@@ -113,6 +114,7 @@ function TransactionsRoute({ onBalanceChange }) {
 // ── page shell ────────────────────────────────────────────────────────────────
 export default function BudgetPage() {
   const navigate = useNavigate()
+  const { vaultToken } = useVault()
   const [refreshKey, setRefreshKey] = useState(0)
 
   // AccountsPage.onNav(section, params) → navigate within the module
@@ -129,7 +131,7 @@ export default function BudgetPage() {
       <div style={{ marginLeft: SIDEBAR_W }}>
         <Routes>
           <Route index             element={<Navigate to="accounts" replace />} />
-          <Route path="accounts"   element={<AccountsPage onNav={handleNav} vaultToken={null} />} />
+          <Route path="accounts"   element={<AccountsPage onNav={handleNav} vaultToken={vaultToken} />} />
           <Route path="transactions" element={<TransactionsRoute onBalanceChange={() => setRefreshKey(k => k + 1)} />} />
           <Route path="categories" element={<CategoriesPage />} />
           <Route path="payees"     element={<PayeesPage />} />

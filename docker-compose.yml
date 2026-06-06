@@ -26,6 +26,24 @@ services:
       - "9500:80"
     depends_on:
       - api
+      - vault
+    networks:
+      - internal
+
+  # vault module: self-hosted Vaultwarden (Bitwarden-compatible). Reached only
+  # through nginx at /vault/ (not exposed directly). DOMAIN must match how you
+  # actually reach the app, e.g. http://<nerfBase-ip>:9500/vault.
+  vault:
+    image: vaultwarden/server:latest
+    container_name: thrivecore_vault
+    restart: unless-stopped
+    volumes:
+      - ./data/vault:/data
+    environment:
+      - DOMAIN=http://localhost:9500/vault
+      - ROCKET_PORT=8222
+      - WEB_VAULT_ENABLED=true
+      - SIGNUPS_ALLOWED=true   # set false after you create your account
     networks:
       - internal
 

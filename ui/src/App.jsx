@@ -7,6 +7,7 @@ import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from
 import { AuthProvider, useAuth } from './context/AuthContext'
 import { ToastProvider }   from './context/ToastContext'
 import { ConfirmProvider } from './context/ConfirmModal'
+import { VaultProvider }   from './context/VaultContext'
 import { api } from './api'
 import LoginPage   from './components/LoginPage'
 import LandingPage from './pages/LandingPage'
@@ -15,6 +16,7 @@ import UsersPage   from './pages/UsersPage'
 import HomePage    from './pages/HomePage'
 import VehiclesPage from './pages/VehiclesPage'
 import BudgetPage  from './pages/BudgetPage'
+import VaultPage   from './pages/VaultPage'
 
 // ── top nav ───────────────────────────────────────────────────────────────────
 // Custom nav icon order is persisted per-device (localStorage) — the icon
@@ -152,6 +154,7 @@ function Shell() {
           <Route path="/home"     element={<HomePage />} />
           <Route path="/vehicles" element={<VehiclesPage />} />
           <Route path="/budget/*" element={<BudgetPage />} />
+          <Route path="/vault"    element={<VaultPage />} />
           <Route path="/users"    element={<UsersPage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="*"         element={<Navigate to="/" replace />} />
@@ -177,11 +180,13 @@ export default function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <ToastProvider>
-          <ConfirmProvider>
-            <Gate />
-          </ConfirmProvider>
-        </ToastProvider>
+        <VaultProvider>
+          <ToastProvider>
+            <ConfirmProvider>
+              <Gate />
+            </ConfirmProvider>
+          </ToastProvider>
+        </VaultProvider>
       </AuthProvider>
     </BrowserRouter>
   )
