@@ -14,3 +14,4 @@ modules/*
 !modules/users/
 !modules/home/
 !modules/vehicles/
+!modules/budget/

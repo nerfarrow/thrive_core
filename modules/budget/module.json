@@ -1,0 +1,20 @@
+{
+  "id": "budget",
+  "name": "Budget",
+  "icon": "💰",
+  "description": "Accounts, transactions, categories, payees, scheduled, reports",
+  "version": "0.1.0",
+  "color": "#eab308",
+  "nav_path": "/budget",
+  "core": false,
+  "api_routers": [
+    "api.routers.accounts",
+    "api.routers.categories",
+    "api.routers.payees",
+    "api.routers.transactions",
+    "api.routers.scheduled",
+    "api.routers.reports",
+    "api.routers.plaid"
+  ],
+  "requires": []
+}
