@@ -6,7 +6,11 @@ dist/
 .env
 *.db
 
-# modules: only the bundled `users` module ships with thrive_core.
+# modules: only the bundled `users` and `home` modules ship with thrive_core.
 # Everything else (vehicles, budget, vault, ...) is installed separately.
+# (home is bundled like users — its React page lives in core ui/ until modules
+#  can ship their own pages.)
 modules/*
 !modules/users/
+!modules/home/
+!modules/vehicles/

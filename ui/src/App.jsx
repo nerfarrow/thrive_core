@@ -10,6 +10,8 @@ import LoginPage   from './components/LoginPage'
 import LandingPage from './pages/LandingPage'
 import SettingsPage from './pages/SettingsPage'
 import UsersPage   from './pages/UsersPage'
+import HomePage    from './pages/HomePage'
+import VehiclesPage from './pages/VehiclesPage'
 
 // ── top nav ───────────────────────────────────────────────────────────────────
 // Custom nav icon order is persisted per-device (localStorage) — the icon
@@ -110,6 +112,26 @@ function TopNav() {
   )
 }
 
+// ── root ────────────────────────────────────────────────────────────────────
+// Landing behaviour depends on the home module: if it's active, `/` is the home
+// base; otherwise `/` shows the module tiles (LandingPage).
+function RootRoute() {
+  const [dest, setDest] = useState(undefined)   // undefined=loading | string nav_path | null=tiles
+  useEffect(() => {
+    let cancelled = false
+    api.get('/modules')
+      .then(ms => {
+        const home = ms.find(m => m.id === 'home' && m.installed && m.enabled)
+        if (!cancelled) setDest(home ? (home.nav_path || '/home') : null)
+      })
+      .catch(() => { if (!cancelled) setDest(null) })
+    return () => { cancelled = true }
+  }, [])
+  if (dest === undefined) return null            // brief: avoid flashing tiles before redirect
+  if (dest) return <Navigate to={dest} replace />
+  return <LandingPage />
+}
+
 // ── shell ─────────────────────────────────────────────────────────────────────
 function Shell() {
   return (
@@ -117,7 +139,9 @@ function Shell() {
       <TopNav />
       <main style={{ marginTop: 48, minHeight: 'calc(100vh - 48px)' }}>
         <Routes>
-          <Route path="/"         element={<LandingPage />} />
+          <Route path="/"         element={<RootRoute />} />
+          <Route path="/home"     element={<HomePage />} />
+          <Route path="/vehicles" element={<VehiclesPage />} />
           <Route path="/users"    element={<UsersPage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="*"         element={<Navigate to="/" replace />} />
