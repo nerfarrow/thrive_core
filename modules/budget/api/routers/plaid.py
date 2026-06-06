@@ -153,6 +153,12 @@ def _find_match(account_id: int, amount_cents: int, date: str, db) -> Optional[i
 # Routes
 # ---------------------------------------------------------------------------
 
+@router.get("/status")
+def plaid_status():
+    """Whether Plaid API credentials are configured — drives showing the panel."""
+    return {"configured": bool(PLAID_CLIENT_ID and PLAID_SECRET)}
+
+
 @router.post("/connections", status_code=201)
 def add_connection(body: ConnectionIn, db=Depends(get_db)):
     """Register a Plaid access token linked to a thrive account."""

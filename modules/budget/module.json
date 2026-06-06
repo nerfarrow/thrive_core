@@ -1,6 +1,6 @@
 {
   "id": "budget",
-  "name": "Accounts",
+  "name": "Budget",
   "icon": "💰",
   "description": "Accounts, transactions, categories, payees, scheduled, reports",
   "version": "0.1.0",
