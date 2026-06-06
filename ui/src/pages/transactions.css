@@ -195,6 +195,8 @@
     border-left: 2px solid #f59e0b;
     border-right: 2px solid #f59e0b;
     margin: 0 -2px;
+    /* subtle orange wash so the area between matched rows reads as one group */
+    background: rgba(245, 158, 11, 0.06);
 }
 
 .match-pair--top {
