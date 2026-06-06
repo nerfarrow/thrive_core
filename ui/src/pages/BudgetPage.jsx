@@ -16,7 +16,6 @@ import CategoriesPage   from './CategoriesPage'
 import PayeesPage       from './PayeesPage'
 import ScheduledPage    from './ScheduledPage'
 import CategoryBreakdown from './CategoryBreakdown'
-import PlaidPanel        from './PlaidPanel'
 
 // budget stylesheets (monolith CSS + var aliases). budget-theme.css must load
 // first so the aliased variables are defined before the rest reference them.
@@ -36,7 +35,6 @@ const FINANCE_ITEMS = [
   { id: 'categories',   label: 'Categories'   },
   { id: 'payees',       label: 'Payees'       },
   { id: 'scheduled',    label: 'Scheduled'    },
-  { id: 'plaid',        label: 'Plaid'        },
 ]
 
 // ── context sidebar ───────────────────────────────────────────────────────────
@@ -56,7 +54,7 @@ function BudgetSidebar({ refreshKey }) {
       overflowY: 'auto', zIndex: 100, display: 'flex', flexDirection: 'column',
     }}>
       {/* Reports — collapsible */}
-      <div style={{ borderBottom: '1px solid var(--border-color,#2a2a2a)', marginBottom: 4 }}>
+      <div>
         <button className={`nav-accounts-toggle ${path.startsWith('/budget/reports') ? 'active' : ''}`}
           onClick={() => setReportsOpen(o => !o)}>
           <span>Reports</span>
@@ -139,7 +137,6 @@ export default function BudgetPage() {
           <Route path="payees"     element={<PayeesPage />} />
           <Route path="scheduled"  element={<ScheduledPage />} />
           <Route path="reports"    element={<CategoryBreakdown />} />
-          <Route path="plaid"      element={<PlaidPanel />} />
           <Route path="*"          element={<Navigate to="accounts" replace />} />
         </Routes>
       </div>

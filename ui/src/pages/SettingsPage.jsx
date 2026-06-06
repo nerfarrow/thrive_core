@@ -5,6 +5,7 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { api } from '../api'
+import PlaidPanel from './PlaidPanel'
 
 const card = { background: 'var(--bg-secondary,#181818)', border: '1px solid var(--border-color,#2a2a2a)', borderRadius: 10, marginBottom: 16, overflow: 'hidden' }
 const head = { padding: '12px 16px', borderBottom: '1px solid var(--border-color,#2a2a2a)', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--text-tertiary,#666)' }
@@ -224,6 +225,14 @@ function AccountsSection() {
 
 export default function SettingsPage() {
   const { user, logout } = useAuth()
+  // Plaid is a Budget feature — its settings section appears here only when the
+  // Budget module is enabled.
+  const [budgetEnabled, setBudgetEnabled] = useState(false)
+  useEffect(() => {
+    api.get('/modules')
+      .then(ms => { const b = ms.find(m => m.id === 'budget'); setBudgetEnabled(!!(b && b.installed && b.enabled)) })
+      .catch(() => {})
+  }, [])
 
   return (
     <div style={{ maxWidth: 700, margin: '0 auto', padding: '1.5rem 1.5rem 3rem' }}>
@@ -254,6 +263,16 @@ export default function SettingsPage() {
         <div style={head}>Modules</div>
         <ModulesSection />
       </div>
+
+      {/* Plaid — shown when the Budget module is enabled */}
+      {budgetEnabled && (
+        <div style={card}>
+          <div style={head}>Plaid</div>
+          <div style={{ padding: 16 }}>
+            <PlaidPanel />
+          </div>
+        </div>
+      )}
     </div>
   )
 }

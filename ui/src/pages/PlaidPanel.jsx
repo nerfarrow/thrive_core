@@ -115,12 +115,7 @@ export default function PlaidPanel() {
   }, {})
 
   return (
-    <div style={{ padding: '1.5rem 1.5rem 3rem', maxWidth: 640, margin: '0 auto' }}>
-      <div style={{ marginBottom: '1.5rem' }}>
-        <h1 style={{ fontSize: 14, fontWeight: 500, letterSpacing: '0.15em', textTransform: 'uppercase', margin: 0 }}>Plaid</h1>
-        <p style={{ fontSize: 12, color: 'var(--text-tertiary,#888)', marginTop: 4 }}>Bank connections — paste an access token, map its accounts</p>
-      </div>
-
+    <>
       {/* API credentials — get these from dashboard.plaid.com → Developers → Keys */}
       <div className="conn-block" style={{ marginBottom: 12 }}>
         <div className="conn-block-header">
@@ -226,6 +221,6 @@ export default function PlaidPanel() {
           </div>
         )}
       </div>
-    </div>
+    </>
   )
 }
