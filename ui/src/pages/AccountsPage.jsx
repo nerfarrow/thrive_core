@@ -29,6 +29,8 @@ export default function AccountsPage({ onNav, vaultToken }) {
     const [loading, setLoading] = useState(true)
     const [sortBy, setSortBy] = useState('default')
     const [expandedId, setExpandedId] = useState(null)
+    const [dragId, setDragId] = useState(null)
+    const [overId, setOverId] = useState(null)
     const [plaidAcctIds, setPlaidAcctIds] = useState(new Set())
     const [syncingId, setSyncingId] = useState(null)
     const [syncOption, setSyncOption] = useState(SYNC_OPTIONS[2])
@@ -60,6 +62,7 @@ export default function AccountsPage({ onNav, vaultToken }) {
             ])
             setAccounts(acctData)
             setPlaidAcctIds(new Set(connData.map(c => c.account_id)))
+            window.dispatchEvent(new Event('thrivecore:accounts-changed'))
         } catch (e) {
             showToast(e.message, 'error')
         } finally {
@@ -201,23 +204,43 @@ export default function AccountsPage({ onNav, vaultToken }) {
         }
     }
 
-    const onBudgetTotal = accounts.filter(a => a.on_budget !== false).reduce((s, a) => s + (a.balance || 0), 0)
-    const offBudgetTotal = accounts.filter(a => a.on_budget === false).reduce((s, a) => s + (a.balance || 0), 0)
-    const totalBalance = onBudgetTotal + offBudgetTotal
+    // total reflects on-budget accounts only — off-budget balances are excluded entirely
+    const totalBalance = accounts.filter(a => a.on_budget !== false).reduce((s, a) => s + (a.balance || 0), 0)
 
-    const sorted = [...accounts].sort((a, b) => {
-        switch (sortBy) {
-            case 'name_az': return a.name.localeCompare(b.name)
-            case 'name_za': return b.name.localeCompare(a.name)
-            case 'id': return a.id - b.id
-            case 'balance_high': return (b.balance || 0) - (a.balance || 0)
-            case 'balance_low': return (a.balance || 0) - (b.balance || 0)
-            case 'institution': return (a.institution || '').localeCompare(b.institution || '')
-            default:
-                if ((a.on_budget !== false) !== (b.on_budget !== false)) return a.on_budget !== false ? -1 : 1
-                return a.name.localeCompare(b.name)
+    // 'default' = the manual order persisted server-side (drag to reorder); every
+    // other option is a computed sort where dragging is disabled.
+    const canDrag = sortBy === 'default'
+    const sorted = sortBy === 'default'
+        ? accounts
+        : [...accounts].sort((a, b) => {
+            switch (sortBy) {
+                case 'name_az': return a.name.localeCompare(b.name)
+                case 'name_za': return b.name.localeCompare(a.name)
+                case 'id': return a.id - b.id
+                case 'balance_high': return (b.balance || 0) - (a.balance || 0)
+                case 'balance_low': return (a.balance || 0) - (b.balance || 0)
+                case 'institution': return (a.institution || '').localeCompare(b.institution || '')
+                default: return 0
+            }
+        })
+
+    async function handleDrop(targetId) {
+        if (dragId && dragId !== targetId) {
+            const ids = sorted.map(a => a.id)
+            ids.splice(ids.indexOf(dragId), 1)            // pull the dragged id out
+            ids.splice(ids.indexOf(targetId), 0, dragId)  // drop it in front of the target
+            const byId = new Map(accounts.map(a => [a.id, a]))
+            setAccounts(ids.map(id => byId.get(id)))      // optimistic
+            try {
+                await api.put('/budget/accounts/reorder', { order: ids })
+                window.dispatchEvent(new Event('thrivecore:accounts-changed'))
+            } catch (e) {
+                showToast(e.message || 'Reorder failed', 'error')
+                load()
+            }
         }
-    })
+        setDragId(null); setOverId(null)
+    }
 
     return (
         <div className="page">
@@ -225,7 +248,6 @@ export default function AccountsPage({ onNav, vaultToken }) {
                 <h1 className="page-title">Accounts</h1>
                 <span className="muted">
                     {accounts.length} accounts · {fmtMoney(totalBalance)} total
-                    {offBudgetTotal !== 0 && ` (${fmtMoney(onBudgetTotal)} on-budget)`}
                 </span>
             </div>
 
@@ -273,7 +295,7 @@ export default function AccountsPage({ onNav, vaultToken }) {
                     value={sortBy}
                     onChange={e => setSortBy(e.target.value)}
                 >
-                    <option value="default">Default (on-budget first)</option>
+                    <option value="default">Manual (drag to reorder)</option>
                     <option value="name_az">Name A-Z</option>
                     <option value="name_za">Name Z-A</option>
                     <option value="balance_high">Balance high → low</option>
@@ -309,6 +331,13 @@ export default function AccountsPage({ onNav, vaultToken }) {
                                 <AccountRow
                                     key={a.id}
                                     acct={a}
+                                    canDrag={canDrag}
+                                    dragging={dragId === a.id}
+                                    isOver={overId === a.id && dragId && dragId !== a.id}
+                                    onDragStart={() => setDragId(a.id)}
+                                    onDragEnter={() => setOverId(a.id)}
+                                    onDrop={() => handleDrop(a.id)}
+                                    onDragEnd={() => { setDragId(null); setOverId(null) }}
                                     expanded={expandedId === a.id}
                                     onToggle={() => setExpandedId(expandedId === a.id ? null : a.id)}
                                     onEdit={() => { startEdit(a); setExpandedId(null) }}
@@ -337,6 +366,7 @@ function AccountRow({
     acct, expanded, onToggle, onEdit, onDelete,
     hasPlaid, syncing, syncOption, onSyncOptionChange, onSync,
     vaultToken, ciphers, ciphersLoading, linking, onLinkVault,
+    canDrag, dragging, isOver, onDragStart, onDragEnter, onDrop, onDragEnd,
 }) {
     const offBudget = acct.on_budget === false
     const balanceClass = acct.balance < 0 ? 'sched-amount expense' : 'sched-amount income'
@@ -348,9 +378,28 @@ function AccountRow({
         : null
 
     return (
-        <div className={`sched-row acct-clickable ${offBudget ? 'off-budget-row' : ''} ${expanded ? 'expanded' : ''}`}>
+        <div
+            className={`sched-row acct-clickable ${offBudget ? 'off-budget-row' : ''} ${expanded ? 'expanded' : ''}`}
+            draggable={canDrag}
+            onDragStart={canDrag ? (e => { onDragStart(); e.dataTransfer.effectAllowed = 'move' }) : undefined}
+            onDragEnter={canDrag ? onDragEnter : undefined}
+            onDragOver={canDrag ? (e => { e.preventDefault(); e.dataTransfer.dropEffect = 'move' }) : undefined}
+            onDrop={canDrag ? (e => { e.preventDefault(); onDrop() }) : undefined}
+            onDragEnd={canDrag ? onDragEnd : undefined}
+            style={{
+                opacity: dragging ? 0.3 : undefined,
+                boxShadow: isOver ? 'inset 0 2px 0 var(--text-primary,#e8e6e0)' : undefined,
+            }}
+        >
             <div className="sched-info" onClick={onToggle}>
                 <div className="sched-name-row">
+                    {canDrag && (
+                        <span
+                            className="acct-drag-handle"
+                            title="Drag to reorder"
+                            style={{ cursor: 'grab', color: 'var(--text-tertiary,#666)', marginRight: 2, fontSize: 13, lineHeight: 1 }}
+                        >⠿</span>
+                    )}
                     <span className="sched-id">{acct.id}</span>
                     <span className="sched-payee">{acct.name}</span>
                     {offBudget && <span className="off-budget-tag">off</span>}

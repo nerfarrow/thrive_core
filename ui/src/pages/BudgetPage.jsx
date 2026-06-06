@@ -45,7 +45,13 @@ function BudgetSidebar({ refreshKey }) {
   const [accountsOpen, setAccountsOpen] = useState(true)
   const [reportsOpen,  setReportsOpen]  = useState(false)
 
-  useEffect(() => { api.get('/budget/accounts/').then(setAccounts).catch(() => {}) }, [refreshKey])
+  useEffect(() => {
+    const fetchAccounts = () => api.get('/budget/accounts/').then(setAccounts).catch(() => {})
+    fetchAccounts()
+    // re-fetch when the Accounts page changes the list/order (drag-reorder, add, delete)
+    window.addEventListener('thrivecore:accounts-changed', fetchAccounts)
+    return () => window.removeEventListener('thrivecore:accounts-changed', fetchAccounts)
+  }, [refreshKey])
 
   return (
     <div style={{

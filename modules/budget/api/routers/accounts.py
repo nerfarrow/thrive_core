@@ -46,6 +46,14 @@ def init_db():
                 vault_item_id TEXT
             )
         """)
+        # manual drag-to-reorder position. Backfill once in the previous default
+        # display order (on-budget first, then name) so nothing visibly shifts.
+        cols = [r[1] for r in db.execute("PRAGMA table_info(budget_accounts)").fetchall()]
+        if "position" not in cols:
+            db.execute("ALTER TABLE budget_accounts ADD COLUMN position INTEGER")
+            rows = db.execute("SELECT id FROM budget_accounts ORDER BY on_budget DESC, name").fetchall()
+            for i, r in enumerate(rows):
+                db.execute("UPDATE budget_accounts SET position = ? WHERE id = ?", (i, r[0]))
         db.commit()
     finally:
         db.close()
@@ -71,7 +79,7 @@ class AccountUpdate(BaseModel):
 @router.get("/")
 def list_accounts(db=Depends(get_db)):
     rows = db.execute("""
-        SELECT a.id, a.name, a.institution, a.number, a.on_budget, a.vault_item_id,
+        SELECT a.id, a.name, a.institution, a.number, a.on_budget, a.vault_item_id, a.position,
                COALESCE((
                    SELECT SUM(amount_cents) FROM transactions
                    WHERE account_id = a.id
@@ -80,7 +88,7 @@ def list_accounts(db=Depends(get_db)):
                (SELECT COUNT(*) FROM scheduled    WHERE account_id = a.id) as scheduled_count,
                (SELECT COUNT(*) FROM transactions WHERE account_id = a.id) as transactions_count
         FROM budget_accounts a
-        ORDER BY a.on_budget DESC, a.name
+        ORDER BY a.position IS NULL, a.position, a.on_budget DESC, a.name
     """).fetchall()
     result = []
     for r in rows:
@@ -89,6 +97,19 @@ def list_accounts(db=Depends(get_db)):
         d["on_budget"] = bool(d["on_budget"])
         result.append(d)
     return result
+
+
+class ReorderIn(BaseModel):
+    order: list[int]
+
+
+@router.put("/reorder")
+def reorder_accounts(body: ReorderIn, db=Depends(get_db)):
+    """Persist a new manual ordering. `order` is account ids, top-to-bottom."""
+    for i, account_id in enumerate(body.order):
+        db.execute("UPDATE budget_accounts SET position = ? WHERE id = ?", (i, account_id))
+    db.commit()
+    return {"ok": True, "count": len(body.order)}
 
 
 @router.get("/{account_id}")
@@ -122,9 +143,12 @@ def get_balance(account_id: int, db=Depends(get_db)):
 @router.post("/", status_code=201)
 def add_account(body: AccountIn, db=Depends(get_db)):
     try:
+        next_pos = db.execute(
+            "SELECT COALESCE(MAX(position), -1) + 1 FROM budget_accounts"
+        ).fetchone()[0]
         cur = db.execute(
-            "INSERT INTO budget_accounts (name, institution, number, on_budget) VALUES (?, ?, ?, ?)",
-            (body.name, body.institution, body.number, 1 if body.on_budget else 0)
+            "INSERT INTO budget_accounts (name, institution, number, on_budget, position) VALUES (?, ?, ?, ?, ?)",
+            (body.name, body.institution, body.number, 1 if body.on_budget else 0, next_pos)
         )
         db.commit()
         return {"id": cur.lastrowid, **body.model_dump()}
