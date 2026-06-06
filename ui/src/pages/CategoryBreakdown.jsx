@@ -4,6 +4,7 @@
 // =============================================================================
 import { useState, useEffect, useCallback } from "react";
 import { api } from "../api";
+import SankeyView from "./SankeyView";
 
 const API = "/reports/category-breakdown";
 
@@ -348,6 +349,7 @@ function RangeSelector({ rangeType, setRangeType, fromDate, setFromDate, toDate,
 // ── main page ────────────────────────────────────────────────────────────────
 export default function CategoryBreakdown() {
   const today = () => new Date().toISOString().slice(0, 10);
+  const [view,      setView]      = useState("donut");   // donut | sankey
   const [rangeType, setRangeType] = useState("last30");
   const [fromDate,  setFromDate]  = useState(today);
   const [toDate,    setToDate]    = useState(today);
@@ -375,9 +377,21 @@ export default function CategoryBreakdown() {
 
   return (
     <div style={{ padding: "1.5rem 1.5rem 3rem", maxWidth: 900, margin: "0 auto" }}>
-      <div style={{ marginBottom: "1.5rem" }}>
-        <h1 style={{ fontSize: 14, fontWeight: 500, letterSpacing: "0.15em", textTransform: "uppercase", margin: 0 }}>Category Breakdown</h1>
-        <p style={{ fontSize: 12, color: "var(--text-tertiary,#888)", marginTop: 4 }}>Spending and income by category</p>
+      <div style={{ marginBottom: "1.5rem", display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
+        <div>
+          <h1 style={{ fontSize: 14, fontWeight: 500, letterSpacing: "0.15em", textTransform: "uppercase", margin: 0 }}>Category Breakdown</h1>
+          <p style={{ fontSize: 12, color: "var(--text-tertiary,#888)", marginTop: 4 }}>
+            {view === "sankey" ? "Money flow: income → budget → expenses" : "Spending and income by category"}
+          </p>
+        </div>
+        <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 10, textTransform: "uppercase", letterSpacing: "0.1em", color: "var(--text-tertiary,#666)", flexShrink: 0 }}>
+          View
+          <select value={view} onChange={e => setView(e.target.value)}
+            style={{ fontFamily: "monospace", fontSize: 12, background: "var(--bg-tertiary,#222)", border: "1px solid var(--border-color,#333)", borderRadius: 6, color: "var(--text-primary,#e8e6e0)", padding: "5px 10px", outline: "none", cursor: "pointer" }}>
+            <option value="donut">Donut</option>
+            <option value="sankey">Sankey</option>
+          </select>
+        </label>
       </div>
 
       <RangeSelector {...{rangeType, setRangeType, fromDate, setFromDate, toDate, setToDate}} />
@@ -393,36 +407,45 @@ export default function CategoryBreakdown() {
               {data.from_date} → {data.to_date}
             </p>
           )}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 20 }}>
+          {view === "sankey" ? (
             <div style={card}>
               <div style={{ padding: "10px 16px", borderBottom: "1px solid var(--border-color,#2a2a2a)", fontSize: 10, textTransform: "uppercase", letterSpacing: "0.12em", color: "var(--text-tertiary,#666)" }}>
-                Spending
+                Money Flow
               </div>
-              <div style={{ padding: 16 }}>
-                <DonutChart
-                  categories={data.expenses.categories}
-                  totalCents={data.expenses.total_cents}
-                  title="Spending"
-                  sign={-1}
-                  rangeQS={rangeQS}
-                />
+              <SankeyView data={data} />
+            </div>
+          ) : (
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 20 }}>
+              <div style={card}>
+                <div style={{ padding: "10px 16px", borderBottom: "1px solid var(--border-color,#2a2a2a)", fontSize: 10, textTransform: "uppercase", letterSpacing: "0.12em", color: "var(--text-tertiary,#666)" }}>
+                  Spending
+                </div>
+                <div style={{ padding: 16 }}>
+                  <DonutChart
+                    categories={data.expenses.categories}
+                    totalCents={data.expenses.total_cents}
+                    title="Spending"
+                    sign={-1}
+                    rangeQS={rangeQS}
+                  />
+                </div>
+              </div>
+              <div style={card}>
+                <div style={{ padding: "10px 16px", borderBottom: "1px solid var(--border-color,#2a2a2a)", fontSize: 10, textTransform: "uppercase", letterSpacing: "0.12em", color: "var(--text-tertiary,#666)" }}>
+                  Income
+                </div>
+                <div style={{ padding: 16 }}>
+                  <DonutChart
+                    categories={data.income.categories}
+                    totalCents={data.income.total_cents}
+                    title="Income"
+                    sign={1}
+                    rangeQS={rangeQS}
+                  />
+                </div>
               </div>
             </div>
-            <div style={card}>
-              <div style={{ padding: "10px 16px", borderBottom: "1px solid var(--border-color,#2a2a2a)", fontSize: 10, textTransform: "uppercase", letterSpacing: "0.12em", color: "var(--text-tertiary,#666)" }}>
-                Income
-              </div>
-              <div style={{ padding: 16 }}>
-                <DonutChart
-                  categories={data.income.categories}
-                  totalCents={data.income.total_cents}
-                  title="Income"
-                  sign={1}
-                  rangeQS={rangeQS}
-                />
-              </div>
-            </div>
-          </div>
+          )}
         </>
       )}
     </div>
