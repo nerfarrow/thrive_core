@@ -15,7 +15,10 @@
   --success-dim:   rgba(34, 197, 94, 0.14);
   --danger:        var(--color-danger, #ef4444);
   --accent:        #3b82f6;
-  --accent-dim:    #2563eb;
+  /* dim = a translucent accent wash used *behind* --accent-colored text/icons
+     (buttons, badges, selected rows). It must stay low-opacity or the accent
+     text on top loses contrast — a solid fill here makes blue-on-blue. */
+  --accent-dim:    rgba(59, 130, 246, 0.16);
   --accent-subtle: rgba(59, 130, 246, 0.14);
   --bubble-color:  #3b82f6;
   --radius:        8px;
