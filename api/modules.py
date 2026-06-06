@@ -107,29 +107,44 @@ def get_active_ids() -> set[str]:
 
 # ── router loading ────────────────────────────────────────────────────────────
 def load_module_routers(app: FastAPI, discovered: list[dict], active_ids: set[str]):
-    """Dynamically import and register each active module's API routers."""
+    """Dynamically import and register each active module's API routers.
+
+    Each `api_routers` entry is a dotted path *relative to the module root*
+    (e.g. "api.routers.vehicles" → <module>/api/routers/vehicles.py). We load it
+    straight from its file under a unique synthetic module name rather than via
+    `importlib.import_module`, because every module uses the same `api.routers.*`
+    package path — importing them as real packages makes the first-loaded module
+    shadow the rest (the top-level `api` package binds to one module's dir).
+    Routers stay free to `from routers.auth import …` since the base app dir is
+    already on sys.path.
+    """
     for m in discovered:
         if m["id"] not in active_ids:
             print(f"[modules] {m['id']} not active — skipping")
             continue
         module_path = Path(m["_path"])
-        api_path    = module_path / "api"
-        if not api_path.exists():
-            continue
-        # add module to sys.path so imports work
+        # keep the module root importable for any module-local helper imports
         if str(module_path) not in sys.path:
             sys.path.insert(0, str(module_path))
-        # load each declared router
-        for router_dotpath in m.get("api_routers", []):
+        for dotpath in m.get("api_routers", []):
+            rel  = dotpath.replace(".", "/") + ".py"
+            file = module_path / rel
+            if not file.exists():
+                print(f"[modules] {m['id']}: router file not found ({rel})")
+                continue
+            unique = f"thrive_mod_{m['id']}_{dotpath.replace('.', '_')}"
             try:
-                mod = importlib.import_module(router_dotpath)
+                spec = importlib.util.spec_from_file_location(unique, file)
+                mod  = importlib.util.module_from_spec(spec)
+                sys.modules[unique] = mod
+                spec.loader.exec_module(mod)
                 if hasattr(mod, "router"):
                     app.include_router(mod.router)
-                    print(f"[modules] loaded {m['id']} → {router_dotpath}")
+                    print(f"[modules] loaded {m['id']} → {dotpath}")
                 else:
-                    print(f"[modules] {router_dotpath} has no 'router' attribute")
+                    print(f"[modules] {dotpath} has no 'router' attribute")
             except Exception as e:
-                print(f"[modules] failed to load {router_dotpath}: {e}")
+                print(f"[modules] failed to load {dotpath}: {e}")
 
 
 # ── public api ────────────────────────────────────────────────────────────────

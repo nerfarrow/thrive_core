@@ -12,12 +12,20 @@ import SettingsPage from './pages/SettingsPage'
 import UsersPage   from './pages/UsersPage'
 
 // ── top nav ───────────────────────────────────────────────────────────────────
+// Custom nav icon order is persisted per-device (localStorage) — the icon
+// arrangement is a property of this screen/kiosk, not the account.
+const NAV_ORDER_KEY = 'thrivecore:navOrder'
+const loadNavOrder = () => { try { return JSON.parse(localStorage.getItem(NAV_ORDER_KEY)) || [] } catch { return [] } }
+
 function TopNav() {
   const { user, logout } = useAuth()
   const navigate  = useNavigate()
   const location  = useLocation()
   const [hov, setHov] = useState(null)
   const [modules, setModules] = useState([])
+  const [order,  setOrder]  = useState(loadNavOrder)   // array of module ids
+  const [dragId, setDragId] = useState(null)
+  const [overId, setOverId] = useState(null)
 
   useEffect(() => {
     if (!user) { setModules([]); return }
@@ -26,7 +34,28 @@ function TopNav() {
     window.addEventListener('thrivecore:modules-changed', fetchModules)
     return () => window.removeEventListener('thrivecore:modules-changed', fetchModules)
   }, [user])
-  const navModules = modules.filter(m => m.installed && m.enabled && m.nav_path)
+
+  // active nav modules, arranged by the saved order; unknown/new ones fall to the end
+  const active = modules.filter(m => m.installed && m.enabled && m.nav_path)
+  const byId   = new Map(active.map(m => [m.id, m]))
+  const navModules = [
+    ...order.filter(id => byId.has(id)).map(id => byId.get(id)),
+    ...active.filter(m => !order.includes(m.id)),
+  ]
+
+  const persistOrder = (ids) => {
+    setOrder(ids)
+    try { localStorage.setItem(NAV_ORDER_KEY, JSON.stringify(ids)) } catch {}
+  }
+  const dropOn = (targetId) => {
+    if (dragId && dragId !== targetId) {
+      const ids = navModules.map(m => m.id)
+      ids.splice(ids.indexOf(dragId), 1)            // pull the dragged id out
+      ids.splice(ids.indexOf(targetId), 0, dragId)  // drop it in front of the target
+      persistOrder(ids)
+    }
+    setDragId(null); setOverId(null)
+  }
 
   const path = location.pathname
   const iconBtn = (id) => ({
@@ -46,15 +75,29 @@ function TopNav() {
       </button>
       <div style={{ width: 1, height: 20, background: 'var(--border-color,#333)', marginRight: 6 }} />
 
-      {/* module icons — rendered dynamically from enabled modules */}
-      {navModules.map(m => (
-        <button key={m.id} onClick={() => navigate(m.nav_path)} title={m.name}
-          style={iconBtn(m.id)}
-          onMouseEnter={() => setHov(m.id)}
-          onMouseLeave={() => setHov(null)}>
-          {m.icon || '📦'}
-        </button>
-      ))}
+      {/* module icons — dynamic + drag-to-reorder (order saved per device) */}
+      {navModules.map(m => {
+        const isOver = overId === m.id && dragId && dragId !== m.id
+        return (
+          <button key={m.id} onClick={() => navigate(m.nav_path)} title={m.name}
+            draggable
+            onDragStart={e => { setDragId(m.id); e.dataTransfer.effectAllowed = 'move' }}
+            onDragEnter={() => setOverId(m.id)}
+            onDragOver={e => { e.preventDefault(); e.dataTransfer.dropEffect = 'move' }}
+            onDrop={e => { e.preventDefault(); dropOn(m.id) }}
+            onDragEnd={() => { setDragId(null); setOverId(null) }}
+            style={{
+              ...iconBtn(m.id),
+              cursor: 'grab',
+              opacity: dragId === m.id ? 0.3 : iconBtn(m.id).opacity,
+              boxShadow: isOver ? 'inset 2px 0 0 var(--text-primary,#e8e6e0)' : 'none',
+            }}
+            onMouseEnter={() => setHov(m.id)}
+            onMouseLeave={() => setHov(null)}>
+            {m.icon || '📦'}
+          </button>
+        )
+      })}
 
       <div style={{ flex: 1 }} />
       <button onClick={() => navigate('/settings')} title="Settings"

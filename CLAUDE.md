@@ -43,11 +43,24 @@ entire point of the machine. But thrive_core itself runs on any Linux box via Do
 
 ### How it works
 1. On API startup, `modules.py` scans `/app/modules/` for folders with `module.json`
-2. Discovered modules are synced to the `modules` DB table
-3. Enabled modules have their API routers dynamically imported and registered
-4. Frontend fetches `GET /modules` to know what's installed/enabled
-5. Landing page shows enabled module cards
-6. Top bar shows module nav icons
+2. Discovered modules are synced to the `modules` DB table. **Discovery ≠ install:**
+   a newly discovered module registers as `installed=0, enabled=0` — install is
+   opt-in via Settings → Modules (Available → Install). A module is **active**
+   (routers load, landing tile, nav icon) only when `installed=1 AND enabled=1`.
+3. Active modules have each `api_routers` entry loaded **from its file** under a
+   unique synthetic module name (see note below) and registered on the app
+4. Frontend fetches `GET /modules` to know what's discovered/installed/enabled
+5. Landing page shows active module cards; top bar shows active module nav icons
+
+**Router loading note:** every module declares routers under the same dotted path
+(`api.routers.<name>`), so the loader does NOT use `importlib.import_module` — that
+would make the first-loaded module's `api` package shadow all the others. Instead
+`load_module_routers()` maps the dotted path to `<module>/api/routers/<name>.py`
+and loads it via `spec_from_file_location` under a unique name. Consequences:
+- modules **do not need `__init__.py`** anywhere
+- each router file must be self-contained: import platform helpers with
+  `from routers.auth import get_db, current_user_from_request`, define `router`,
+  and create its own tables in an idempotent `init_db()` called at module top level
 
 ### module.json spec
 ```json

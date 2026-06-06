@@ -7,6 +7,7 @@ services:
       - ./data:/data
       - ./modules:/app/modules   # modules mounted live — no rebuild needed
     environment:
+      - PYTHONUNBUFFERED=1     # flush print() immediately so [modules] logs aren't buffered
       - DB_FILE=/data/thrivecore.db
       - MODULES_DIR=/app/modules
       - COOKIE_SECURE=false   # http dev on :9500 — Secure cookies get dropped over http
