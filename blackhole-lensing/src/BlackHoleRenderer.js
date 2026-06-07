@@ -1,0 +1,250 @@
+// =============================================================================
+// BlackHoleRenderer.js — framework-agnostic WebGL renderer for the lensing core
+//
+// Manages the GL context, program, uniforms, tunable params, the quality knob
+// (steps + internal resolution scale + framerate cap) and the animation loop.
+// No framework dependencies — usable from plain HTML, React, anything.
+//
+//   const bh = new BlackHoleRenderer(canvas, { ...params });
+//   bh.setQuality('low'); bh.start();
+//   bh.setParams({ palette: 1.0 }); bh.stop(); bh.destroy();
+// =============================================================================
+
+import { VERTEX_SHADER, FRAGMENT_SHADER } from './shaders.js';
+
+// ---- tunable scene params (sim units; Schwarzschild radius ~ horizon) -------
+export const DEFAULT_PARAMS = {
+  camDist:     22.0,   // camera distance from the hole
+  inclination: 0.16,   // radians above the disk plane; small = near edge-on
+  fov:         1.0,    // zoom (smaller = tighter)
+  offset:      [0.0, 0.0], // focal offset in screen fractions (push hole off-centre)
+
+  horizon:     1.0,    // event-horizon radius
+  diskInner:   3.0,    // inner edge (~ISCO)
+  diskOuter:   11.0,   // outer edge
+
+  palette:     0.0,    // 0 = NASA red/orange, 1 = Interstellar white-gold
+  intensity:   1.0,    // overall brightness
+  beaming:     1.0,    // doppler beaming strength (0 disables)
+
+  stars:       0.8,    // lensed background starfield intensity
+  nebula:      0.5,    // lensed dust/nebula haze intensity
+  glow:        0.6,    // photon-ring / lensing bloom halo
+
+  rotationSpeed: 0.15, // radians/sec of disk rotation (visual)
+
+  // camera abstraction for the multi-screen "virtual wall"
+  cameraRect:    [0.0, 0.0, 1.0, 1.0], // sub-rect of the virtual scene (x,y,w,h)
+  virtualAspect: 0,    // 0 = auto (use this canvas aspect); else force scene aspect
+};
+
+// ---- quality presets: integration steps, render-res scale, fps cap ----------
+export const QUALITY_PRESETS = {
+  ultra:  { steps: 320, resolutionScale: 1.0,  fpsCap: 60 },
+  high:   { steps: 220, resolutionScale: 1.0,  fpsCap: 60 },
+  medium: { steps: 150, resolutionScale: 0.75, fpsCap: 30 },
+  low:    { steps: 90,  resolutionScale: 0.6,  fpsCap: 20 },
+  potato: { steps: 55,  resolutionScale: 0.45, fpsCap: 15 },
+};
+
+const UNIFORM_NAMES = [
+  'uResolution', 'uTime', 'uRotation', 'uAspect', 'uCameraRect', 'uOffset',
+  'uCamDist', 'uInclination', 'uFov', 'uSteps', 'uHorizon', 'uDiskInner',
+  'uDiskOuter', 'uPalette', 'uIntensity', 'uBeaming',
+  'uStars', 'uNebula', 'uGlow',
+];
+
+export class BlackHoleRenderer {
+  /**
+   * @param {HTMLCanvasElement} canvas
+   * @param {object} [params]   overrides for DEFAULT_PARAMS
+   * @param {object} [options]  { quality, respectReducedMotion }
+   */
+  constructor(canvas, params = {}, options = {}) {
+    this.canvas = canvas;
+    this.params = { ...DEFAULT_PARAMS, ...params };
+    this.quality = { ...QUALITY_PRESETS[options.quality || 'high'] };
+    this.respectReducedMotion = options.respectReducedMotion !== false;
+
+    this._rotation = 0;
+    this._time = 0;
+    this._raf = null;
+    this._lastFrame = 0;
+    this._lastTick = 0;
+    this._running = false;
+    this._dpr = Math.min(window.devicePixelRatio || 1, 2);
+
+    this._reducedMQ = window.matchMedia
+      ? window.matchMedia('(prefers-reduced-motion: reduce)')
+      : { matches: false, addEventListener: () => {} };
+    this._onReducedChange = () => this._renderOnce();
+    this._reducedMQ.addEventListener?.('change', this._onReducedChange);
+
+    this._initGL();
+    this.resize();
+  }
+
+  // ---- GL setup ------------------------------------------------------------
+  _initGL() {
+    const gl = this.canvas.getContext('webgl', {
+      alpha: true,
+      premultipliedAlpha: false,
+      antialias: false,
+      depth: false,
+      stencil: false,
+      powerPreference: 'low-power',
+      preserveDrawingBuffer: false,
+    });
+    if (!gl) throw new Error('blackhole-lensing: WebGL not available');
+    this.gl = gl;
+
+    const vs = this._compile(gl.VERTEX_SHADER, VERTEX_SHADER);
+    const fs = this._compile(gl.FRAGMENT_SHADER, FRAGMENT_SHADER);
+    const prog = gl.createProgram();
+    gl.attachShader(prog, vs);
+    gl.attachShader(prog, fs);
+    gl.linkProgram(prog);
+    if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) {
+      throw new Error('blackhole-lensing: link failed: ' + gl.getProgramInfoLog(prog));
+    }
+    this.program = prog;
+    gl.useProgram(prog);
+
+    // fullscreen quad (two triangles)
+    this.buffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.buffer);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
+      -1, -1, 1, -1, -1, 1, -1, 1, 1, -1, 1, 1,
+    ]), gl.STATIC_DRAW);
+    const loc = gl.getAttribLocation(prog, 'aPos');
+    gl.enableVertexAttribArray(loc);
+    gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+
+    this.uniforms = {};
+    for (const name of UNIFORM_NAMES) {
+      this.uniforms[name] = gl.getUniformLocation(prog, name);
+    }
+  }
+
+  _compile(type, src) {
+    const gl = this.gl;
+    const sh = gl.createShader(type);
+    gl.shaderSource(sh, src);
+    gl.compileShader(sh);
+    if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) {
+      throw new Error('blackhole-lensing: shader compile failed: ' + gl.getShaderInfoLog(sh));
+    }
+    return sh;
+  }
+
+  // ---- public API ----------------------------------------------------------
+  setParams(patch) { Object.assign(this.params, patch); if (!this._running) this._renderOnce(); }
+
+  /** quality: a preset name or a partial { steps, resolutionScale, fpsCap } */
+  setQuality(q) {
+    if (typeof q === 'string') this.quality = { ...QUALITY_PRESETS[q] || this.quality };
+    else Object.assign(this.quality, q);
+    this.resize();
+    if (!this._running) this._renderOnce();
+  }
+
+  /** sub-rectangle of the shared virtual scene this instance should render */
+  setCameraRect(x, y, w, h) {
+    this.params.cameraRect = [x, y, w, h];
+    if (!this._running) this._renderOnce();
+  }
+
+  get reducedMotion() { return this.respectReducedMotion && this._reducedMQ.matches; }
+
+  resize() {
+    const { canvas } = this;
+    const cssW = canvas.clientWidth || canvas.width || 300;
+    const cssH = canvas.clientHeight || canvas.height || 150;
+    const scale = this._dpr * this.quality.resolutionScale;
+    const w = Math.max(1, Math.round(cssW * scale));
+    const h = Math.max(1, Math.round(cssH * scale));
+    if (canvas.width !== w || canvas.height !== h) {
+      canvas.width = w;
+      canvas.height = h;
+    }
+    this.gl.viewport(0, 0, w, h);
+    if (!this._running) this._renderOnce();
+  }
+
+  start() {
+    if (this._running) return;
+    // reduced motion: render a single static frame and don't loop (saves power)
+    if (this.reducedMotion) { this._renderOnce(); return; }
+    this._running = true;
+    this._lastTick = performance.now();
+    this._loop(this._lastTick);
+  }
+
+  stop() {
+    this._running = false;
+    if (this._raf) cancelAnimationFrame(this._raf);
+    this._raf = null;
+  }
+
+  destroy() {
+    this.stop();
+    this._reducedMQ.removeEventListener?.('change', this._onReducedChange);
+    const gl = this.gl;
+    if (gl) {
+      gl.deleteProgram(this.program);
+      gl.deleteBuffer(this.buffer);
+      const ext = gl.getExtension('WEBGL_lose_context');
+      ext && ext.loseContext();
+    }
+  }
+
+  // ---- loop ----------------------------------------------------------------
+  _loop(now) {
+    if (!this._running) return;
+    this._raf = requestAnimationFrame((t) => this._loop(t));
+
+    const minDelta = 1000 / (this.quality.fpsCap || 60);
+    if (now - this._lastFrame < minDelta - 0.5) return; // framerate cap
+    const dt = Math.min((now - this._lastTick) / 1000, 0.1);
+    this._lastTick = now;
+    this._lastFrame = now;
+
+    this._time += dt;
+    if (!this.reducedMotion) this._rotation += this.params.rotationSpeed * dt;
+    this._draw();
+  }
+
+  _renderOnce() {
+    if (!this.gl) return;
+    this._draw();
+  }
+
+  _draw() {
+    const gl = this.gl, u = this.uniforms, p = this.params;
+    const w = this.canvas.width, h = this.canvas.height;
+    const aspect = p.virtualAspect > 0 ? p.virtualAspect : w / h;
+
+    gl.useProgram(this.program);
+    gl.uniform2f(u.uResolution, w, h);
+    gl.uniform1f(u.uTime, this._time);
+    gl.uniform1f(u.uRotation, this._rotation);
+    gl.uniform1f(u.uAspect, aspect);
+    gl.uniform4fv(u.uCameraRect, p.cameraRect);
+    gl.uniform2fv(u.uOffset, p.offset);
+    gl.uniform1f(u.uCamDist, p.camDist);
+    gl.uniform1f(u.uInclination, p.inclination);
+    gl.uniform1f(u.uFov, p.fov);
+    gl.uniform1i(u.uSteps, this.quality.steps);
+    gl.uniform1f(u.uHorizon, p.horizon);
+    gl.uniform1f(u.uDiskInner, p.diskInner);
+    gl.uniform1f(u.uDiskOuter, p.diskOuter);
+    gl.uniform1f(u.uPalette, p.palette);
+    gl.uniform1f(u.uIntensity, p.intensity);
+    gl.uniform1f(u.uBeaming, p.beaming);
+    gl.uniform1f(u.uStars, p.stars);
+    gl.uniform1f(u.uNebula, p.nebula);
+    gl.uniform1f(u.uGlow, p.glow);
+
+    gl.drawArrays(gl.TRIANGLES, 0, 6);
+  }
+}

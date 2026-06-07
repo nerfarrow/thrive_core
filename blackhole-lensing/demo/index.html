@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>blackhole-lensing — tuner</title>
+<style>
+  :root { --bg:#06080c; --panel:rgba(14,18,24,.92); --line:#1f2a33; --text:#cfe0e6; --muted:#7c8b94; --accent:#7fd1ff; }
+  * { box-sizing: border-box; }
+  html,body { margin:0; height:100%; background:var(--bg); color:var(--text);
+    font-family:-apple-system,system-ui,"DM Sans",sans-serif; overflow:hidden; }
+  #c { position:fixed; inset:0; width:100vw; height:100vh; display:block; }
+  #panel { position:fixed; top:12px; right:12px; width:300px; max-height:calc(100vh - 24px);
+    overflow-y:auto; background:var(--panel); border:1px solid var(--line); border-radius:12px;
+    padding:14px; backdrop-filter:blur(8px); font-size:12px; z-index:10; }
+  #panel h1 { font-size:12px; letter-spacing:.18em; text-transform:uppercase; margin:0 0 10px;
+    color:var(--muted); font-weight:600; }
+  .row { margin:9px 0; }
+  .row label { display:flex; justify-content:space-between; color:var(--muted);
+    font-size:11px; margin-bottom:3px; }
+  .row label b { color:var(--text); font-weight:500; font-variant-numeric:tabular-nums; }
+  input[type=range] { width:100%; accent-color:var(--accent); }
+  select, button { width:100%; background:#0d141a; color:var(--text); border:1px solid var(--line);
+    border-radius:8px; padding:7px 9px; font-family:inherit; font-size:12px; }
+  button { cursor:pointer; margin-top:4px; }
+  button:hover { border-color:var(--accent); }
+  .grp { border-top:1px solid var(--line); margin-top:12px; padding-top:8px; }
+  .grp .t { color:var(--accent); font-size:10px; letter-spacing:.12em; text-transform:uppercase; margin-bottom:6px; }
+  #fps { position:fixed; bottom:10px; left:12px; font-size:11px; color:var(--muted);
+    font-variant-numeric:tabular-nums; z-index:10; background:var(--panel); padding:4px 8px;
+    border-radius:6px; border:1px solid var(--line); }
+  #toggle { position:fixed; top:12px; right:12px; z-index:11; width:auto; display:none; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="fps">…</div>
+<button id="toggle">params</button>
+
+<div id="panel">
+  <h1>black hole — tuner</h1>
+
+  <div class="grp"><div class="t">quality / performance</div>
+    <div class="row">
+      <label for="quality">Quality preset</label>
+      <select id="quality">
+        <option value="ultra" selected>ultra (320 steps · 1.0× · 60fps)</option>
+        <option value="high">high (220 · 1.0× · 60)</option>
+        <option value="medium">medium (150 · 0.75× · 30)</option>
+        <option value="low">low (90 · 0.6× · 20)</option>
+        <option value="potato">potato (55 · 0.45× · 15)</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="grp"><div class="t">camera / framing</div>
+    <div class="row" data-r="camDist" data-min="8" data-max="40" data-step="0.5"></div>
+    <div class="row" data-r="inclination" data-min="0" data-max="1.4" data-step="0.005" data-deg="1"></div>
+    <div class="row" data-r="fov" data-min="0.4" data-max="2.5" data-step="0.01"></div>
+    <div class="row" data-r="offsetX" data-min="-0.5" data-max="0.5" data-step="0.01"></div>
+    <div class="row" data-r="offsetY" data-min="-0.5" data-max="0.5" data-step="0.01"></div>
+  </div>
+
+  <div class="grp"><div class="t">black hole / disk</div>
+    <div class="row" data-r="horizon" data-min="0.4" data-max="2.5" data-step="0.05"></div>
+    <div class="row" data-r="diskInner" data-min="1.5" data-max="8" data-step="0.1"></div>
+    <div class="row" data-r="diskOuter" data-min="5" data-max="20" data-step="0.1"></div>
+  </div>
+
+  <div class="grp"><div class="t">look</div>
+    <div class="row" data-r="palette" data-min="0" data-max="1" data-step="0.01"></div>
+    <div class="row" data-r="intensity" data-min="0" data-max="2.5" data-step="0.01"></div>
+    <div class="row" data-r="beaming" data-min="0" data-max="1.5" data-step="0.01"></div>
+    <div class="row" data-r="rotationSpeed" data-min="0" data-max="4" data-step="0.01"></div>
+  </div>
+
+  <div class="grp"><div class="t">background / atmosphere</div>
+    <div class="row" data-r="stars" data-min="0" data-max="2" data-step="0.01"></div>
+    <div class="row" data-r="nebula" data-min="0" data-max="2" data-step="0.01"></div>
+    <div class="row" data-r="glow" data-min="0" data-max="2" data-step="0.01"></div>
+  </div>
+
+  <div class="grp">
+    <button id="dump">log current params → console</button>
+    <button id="hide">hide panel</button>
+  </div>
+</div>
+
+<script type="module">
+import { BlackHoleRenderer, DEFAULT_PARAMS } from '../src/index.js';
+
+const canvas = document.getElementById('c');
+// tuner always animates — ignore prefers-reduced-motion here (the real presets honor it)
+// default to ultra so the lensing geometry (esp. the underside arc) fully resolves
+const bh = new BlackHoleRenderer(canvas, {}, { quality: 'ultra', respectReducedMotion: false });
+
+// labels for the sliders (key shown to the user)
+const LABEL = {
+  camDist:'Camera distance', inclination:'Inclination (tilt)', fov:'FOV / zoom',
+  offsetX:'Offset X', offsetY:'Offset Y', horizon:'Shadow / horizon radius',
+  diskInner:'Disk inner radius', diskOuter:'Disk outer radius',
+  palette:'Palette (NASA ⟷ Interstellar)', intensity:'Intensity', beaming:'Doppler beaming',
+  rotationSpeed:'Rotation speed',
+  stars:'Stars', nebula:'Nebula / dust', glow:'Bloom / halo',
+};
+const get = (k) =>
+  k === 'offsetX' ? bh.params.offset[0] :
+  k === 'offsetY' ? bh.params.offset[1] : bh.params[k];
+const set = (k, v) => {
+  if (k === 'offsetX') bh.params.offset[0] = v;
+  else if (k === 'offsetY') bh.params.offset[1] = v;
+  else bh.setParams({ [k]: v });
+};
+
+// build sliders from the data-attributes
+for (const row of document.querySelectorAll('.row[data-r]')) {
+  const k = row.dataset.r, min = +row.dataset.min, max = +row.dataset.max, step = +row.dataset.step;
+  const val = get(k);
+  const fmt = (v) => row.dataset.deg ? (v * 180 / Math.PI).toFixed(1) + '°' : (+v).toFixed(2);
+  row.innerHTML =
+    `<label for="s_${k}">${LABEL[k]} <b id="v_${k}">${fmt(val)}</b></label>
+     <input type="range" id="s_${k}" min="${min}" max="${max}" step="${step}" value="${val}">`;
+  const input = row.querySelector('input');
+  const out = row.querySelector('b');
+  input.addEventListener('input', () => { const v = +input.value; set(k, v); out.textContent = fmt(v); });
+}
+
+document.getElementById('quality').addEventListener('change', (e) => bh.setQuality(e.target.value));
+document.getElementById('dump').addEventListener('click', () => {
+  // eslint-disable-next-line no-console
+  console.log('params =', JSON.stringify(bh.params, null, 2), '\nquality =', bh.quality);
+});
+const panel = document.getElementById('panel');
+const toggle = document.getElementById('toggle');
+document.getElementById('hide').addEventListener('click', () => { panel.style.display='none'; toggle.style.display='block'; });
+toggle.addEventListener('click', () => { panel.style.display='block'; toggle.style.display='none'; });
+
+// fps meter
+let frames = 0, t0 = performance.now();
+const fpsEl = document.getElementById('fps');
+function meter() {
+  frames++;
+  const now = performance.now();
+  if (now - t0 >= 500) {
+    fpsEl.textContent = `${Math.round(frames * 1000 / (now - t0))} fps · ${canvas.width}×${canvas.height}`;
+    frames = 0; t0 = now;
+  }
+  requestAnimationFrame(meter);
+}
+meter();
+
+addEventListener('resize', () => bh.resize());
+bh.start();
+window.bh = bh; // for console tinkering
+</script>
+</body>
+</html>
