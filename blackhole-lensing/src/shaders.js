@@ -116,7 +116,13 @@ vec3 nebula(vec3 dir) {
 }
 vec3 background(vec3 dir) {
   vec3 base = vec3(0.012, 0.018, 0.035);          // deep navy void
-  return base + nebula(dir) * uNebula + starfield(dir) * uStars;
+#ifdef FEAT_NEBULA
+  base += nebula(dir) * uNebula;
+#endif
+#ifdef FEAT_STARS
+  base += starfield(dir) * uStars;
+#endif
+  return base;
 }
 
 void main() {
@@ -177,6 +183,7 @@ void main() {
     vec3 a1    = -kBend * h2 * npos / (nr2 * nr2 * nr);
     vec3 nvel  = vel + 0.5 * (a0 + a1) * dt;
 
+#ifdef FEAT_DISK
     // equatorial-plane (y=0) crossing -> potential disk hit
     if (pos.y * npos.y < 0.0) {
       float f   = pos.y / (pos.y - npos.y);
@@ -186,21 +193,21 @@ void main() {
         float tnorm = (rd - uDiskInner) / (uDiskOuter - uDiskInner); // 0 inner ..1 outer
         float temp  = pow(1.0 - tnorm, 1.5);                          // hotter inside
 
-        // rotating turbulence with differential rotation (inner annuli orbit
-        // faster, ~Keplerian) so the spin reads clearly
-        // RIGID rotation (uniform azimuthal shift) + a fixed spiral baked via
-        // log(rd). Differential rotation (phase scaled by radius) winds the
-        // texture into ever-finer rings over time and bands hard at high speed;
-        // a fixed spiral keeps the swirled look without any runaway frequency.
+        // rigid rotation + a fixed spiral baked via log(rd): a stable swirl with
+        // no runaway frequency / banding at speed.
         float ang  = atan(hit.z, hit.x);
         float spin = ang - uRotation + log(rd) * 1.6;
         float tex  = 0.35 + 0.95 * fbm(vec2(spin * 2.0 + rd * 0.3, rd * 0.7));
 
+#ifdef FEAT_BEAMING
         // doppler beaming: orbital (tangential) velocity vs viewer
         vec3  vdir = normalize(vec3(-hit.z, 0.0, hit.x));
         float beta = clamp(0.42 * sqrt(uHorizon / rd), 0.0, 0.75);    // ~Keplerian
         float dop  = 1.0 + uBeaming * beta * dot(vdir, normalize(-vel)) * 4.0;
         dop = clamp(dop, 0.15, 4.0);
+#else
+        float dop = 1.0;
+#endif
 
         // soft inner/outer falloff so edges aren't hard rings
         float edge = smoothstep(uDiskInner, uDiskInner * 1.08, rd)
@@ -214,6 +221,7 @@ void main() {
         transmit *= (1.0 - alpha);
       }
     }
+#endif
 
     pos = npos;
     vel = nvel;
@@ -228,13 +236,33 @@ void main() {
   // bloom halo: a bright photon ring at the shadow edge (closest approach near
   // the photon sphere) plus a broad soft glow outward — the Interstellar look
   vec3 outc = disk + transmit * bg;
+#ifdef FEAT_GLOW
   if (!captured) {
     float d = (minr - 1.5 * uHorizon) / uHorizon;
     float halo = exp(-d * d / 0.5) + 0.35 * exp(-d * d / 9.0);
     vec3 glowCol = mix(vec3(1.0, 0.96, 0.9), palette(1.0), 0.25);
     outc += halo * glowCol * uGlow;
   }
+#endif
 
   gl_FragColor = vec4(outc, 1.0);
 }
 `;
+
+// ---- feature toggles --------------------------------------------------------
+// Each toggle compiles its feature in/out via a #define, so a disabled feature
+// costs nothing on the GPU (not a runtime ×0). Default: all on.
+export const FEATURES = ['disk', 'beaming', 'stars', 'nebula', 'glow'];
+
+const FEATURE_DEFINE = {
+  disk: 'FEAT_DISK', beaming: 'FEAT_BEAMING', stars: 'FEAT_STARS',
+  nebula: 'FEAT_NEBULA', glow: 'FEAT_GLOW',
+};
+
+/** Build the fragment source with #defines for the enabled features. */
+export function composeFragment(toggles = {}) {
+  const defs = FEATURES
+    .filter(f => toggles[f] !== false)            // default on
+    .map(f => '#define ' + FEATURE_DEFINE[f]);
+  return defs.join('\n') + '\n' + FRAGMENT_SHADER;
+}

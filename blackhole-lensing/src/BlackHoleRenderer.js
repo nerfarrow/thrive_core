@@ -10,7 +10,11 @@
 //   bh.setParams({ palette: 1.0 }); bh.stop(); bh.destroy();
 // =============================================================================
 
-import { VERTEX_SHADER, FRAGMENT_SHADER } from './shaders.js';
+import { VERTEX_SHADER, composeFragment, FEATURES } from './shaders.js';
+
+// Feature toggles — all on by default. Disabling one recompiles the shader with
+// that feature #defined out, so it costs nothing on the GPU.
+export const DEFAULT_TOGGLES = Object.fromEntries(FEATURES.map(f => [f, true]));
 
 // ---- tunable scene params (sim units; Schwarzschild radius ~ horizon) -------
 export const DEFAULT_PARAMS = {
@@ -64,6 +68,7 @@ export class BlackHoleRenderer {
     this.canvas = canvas;
     this.params = { ...DEFAULT_PARAMS, ...params };
     this.quality = { ...QUALITY_PRESETS[options.quality || 'high'] };
+    this.toggles = { ...DEFAULT_TOGGLES, ...(options.toggles || {}) };
     this.respectReducedMotion = options.respectReducedMotion !== false;
 
     this._rotation = 0;
@@ -98,8 +103,23 @@ export class BlackHoleRenderer {
     if (!gl) throw new Error('blackhole-lensing: WebGL not available');
     this.gl = gl;
 
+    // fullscreen quad (two triangles) — created once, reused across recompiles
+    this.buffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.buffer);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
+      -1, -1, 1, -1, -1, 1, -1, 1, 1, -1, 1, 1,
+    ]), gl.STATIC_DRAW);
+
+    this._installProgram();
+  }
+
+  // (Re)compile + link the program for the current feature toggles, then wire
+  // the attribute and uniform locations. Called on init and whenever toggles
+  // change — disabled features are #defined out, so they cost nothing.
+  _installProgram() {
+    const gl = this.gl;
     const vs = this._compile(gl.VERTEX_SHADER, VERTEX_SHADER);
-    const fs = this._compile(gl.FRAGMENT_SHADER, FRAGMENT_SHADER);
+    const fs = this._compile(gl.FRAGMENT_SHADER, composeFragment(this.toggles));
     const prog = gl.createProgram();
     gl.attachShader(prog, vs);
     gl.attachShader(prog, fs);
@@ -107,15 +127,11 @@ export class BlackHoleRenderer {
     if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) {
       throw new Error('blackhole-lensing: link failed: ' + gl.getProgramInfoLog(prog));
     }
+    if (this.program) gl.deleteProgram(this.program);
     this.program = prog;
     gl.useProgram(prog);
 
-    // fullscreen quad (two triangles)
-    this.buffer = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, this.buffer);
-    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
-      -1, -1, 1, -1, -1, 1, -1, 1, 1, -1, 1, 1,
-    ]), gl.STATIC_DRAW);
     const loc = gl.getAttribLocation(prog, 'aPos');
     gl.enableVertexAttribArray(loc);
     gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
@@ -124,6 +140,8 @@ export class BlackHoleRenderer {
     for (const name of UNIFORM_NAMES) {
       this.uniforms[name] = gl.getUniformLocation(prog, name);
     }
+    gl.deleteShader(vs);
+    gl.deleteShader(fs);
   }
 
   _compile(type, src) {
@@ -145,6 +163,14 @@ export class BlackHoleRenderer {
     if (typeof q === 'string') this.quality = { ...QUALITY_PRESETS[q] || this.quality };
     else Object.assign(this.quality, q);
     this.resize();
+    if (!this._running) this._renderOnce();
+  }
+
+  /** enable/disable features — recompiles the shader so disabled ones cost nothing.
+   *  patch e.g. { nebula: false, glow: false }; pass a full map to replace. */
+  setToggles(patch) {
+    Object.assign(this.toggles, patch);
+    this._installProgram();
     if (!this._running) this._renderOnce();
   }
 

@@ -5,7 +5,9 @@ export {
   BlackHoleRenderer,
   DEFAULT_PARAMS,
   QUALITY_PRESETS,
+  DEFAULT_TOGGLES,
 } from './BlackHoleRenderer.js';
+export { FEATURES, composeFragment } from './shaders.js';
 
 // Look/scene presets the consumers build on.
 export const PRESETS = {
@@ -25,6 +27,7 @@ export const PRESETS = {
       nebula: 0.25,
       glow: 0.4,
     },
+    toggles: { disk: true, beaming: true, stars: true, nebula: true, glow: true },
     quality: 'low',            // steps + 0.6 res scale + 20fps cap
   },
 
@@ -47,6 +50,7 @@ export const PRESETS = {
       nebula: 0.5,
       glow: 0.7,
     },
+    toggles: { disk: true, beaming: true, stars: true, nebula: true, glow: true },
     quality: 'ultra',
   },
 };

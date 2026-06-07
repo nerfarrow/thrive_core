@@ -9,10 +9,10 @@
   * { box-sizing: border-box; }
   html,body { margin:0; height:100%; background:var(--bg); color:var(--text);
     font-family:-apple-system,system-ui,"DM Sans",sans-serif; overflow:hidden; }
-  #c { position:fixed; inset:0; width:100vw; height:100vh; display:block; }
-  #panel { position:fixed; top:12px; right:12px; width:300px; max-height:calc(100vh - 24px);
-    overflow-y:auto; background:var(--panel); border:1px solid var(--line); border-radius:12px;
-    padding:14px; backdrop-filter:blur(8px); font-size:12px; z-index:10; }
+  #c { position:fixed; top:0; left:0; width:calc(100vw - 320px); height:100vh; display:block; }
+  #panel { position:fixed; top:0; right:0; bottom:0; width:320px;
+    overflow-y:auto; background:var(--panel); border-left:1px solid var(--line);
+    padding:16px; font-size:12px; z-index:10; }
   #panel h1 { font-size:12px; letter-spacing:.18em; text-transform:uppercase; margin:0 0 10px;
     color:var(--muted); font-weight:600; }
   .row { margin:9px 0; }
@@ -29,13 +29,24 @@
   #fps { position:fixed; bottom:10px; left:12px; font-size:11px; color:var(--muted);
     font-variant-numeric:tabular-nums; z-index:10; background:var(--panel); padding:4px 8px;
     border-radius:6px; border:1px solid var(--line); }
-  #toggle { position:fixed; top:12px; right:12px; z-index:11; width:auto; display:none; }
+  /* slim full-height grip that sits on the panel divider; click to collapse,
+     and (when collapsed, at the screen edge) to pull the panel back out */
+  #toggle { position:fixed; top:0; right:320px; bottom:0; width:18px; z-index:11; display:flex;
+    margin:0; padding:0; border:none; border-left:1px solid var(--line); border-radius:0;
+    background:var(--panel); color:var(--muted); cursor:pointer; font-size:15px;
+    align-items:center; justify-content:center; transition:right .15s; }
+  #toggle:hover { color:var(--text); background:#11161b; }
+  .grp .t { display:flex; align-items:center; justify-content:space-between; cursor:pointer; user-select:none; }
+  .grp .t .chev { font-size:9px; color:var(--muted); transition:transform .15s; }
+  .grp.collapsed .grp-body { display:none; }
+  .grp.collapsed .t { margin-bottom:0; }
+  .grp.collapsed .t .chev { transform:rotate(-90deg); }
 </style>
 </head>
 <body>
 <canvas id="c"></canvas>
 <div id="fps">…</div>
-<button id="toggle">params</button>
+<button id="toggle" title="Show panel" aria-label="Show panel">‹</button>
 
 <div id="panel">
   <h1>black hole — tuner</h1>
@@ -51,6 +62,10 @@
         <option value="potato">potato (55 · 0.45× · 15)</option>
       </select>
     </div>
+  </div>
+
+  <div class="grp"><div class="t">features (compiled in / out)</div>
+    <div id="features" style="display:flex; flex-wrap:wrap; gap:6px 14px;"></div>
   </div>
 
   <div class="grp"><div class="t">camera / framing</div>
@@ -81,13 +96,15 @@
   </div>
 
   <div class="grp">
-    <button id="dump">log current params → console</button>
-    <button id="hide">hide panel</button>
+    <button id="dump">show preset JSON</button>
+    <textarea id="out" readonly spellcheck="false" style="display:none; width:100%; height:170px; margin-top:8px;
+      font-family:monospace; font-size:11px; background:#0d141a; color:var(--text); border:1px solid var(--line);
+      border-radius:8px; padding:8px; box-sizing:border-box; resize:vertical;"></textarea>
   </div>
 </div>
 
 <script type="module">
-import { BlackHoleRenderer, DEFAULT_PARAMS } from '../src/index.js';
+import { BlackHoleRenderer, DEFAULT_PARAMS, FEATURES } from '../src/index.js';
 
 const canvas = document.getElementById('c');
 // tuner always animates — ignore prefers-reduced-motion here (the real presets honor it)
@@ -125,28 +142,49 @@ for (const row of document.querySelectorAll('.row[data-r]')) {
   input.addEventListener('input', () => { const v = +input.value; set(k, v); out.textContent = fmt(v); });
 }
 
+// feature toggles (compiled in/out — recompiles the shader on change)
+const featWrap = document.getElementById('features');
+FEATURES.forEach(f => {
+  const lab = document.createElement('label');
+  lab.style.cssText = 'display:flex; align-items:center; gap:5px; font-size:11px; color:var(--text); text-transform:capitalize; cursor:pointer;';
+  lab.innerHTML = `<input type="checkbox" ${bh.toggles[f] ? 'checked' : ''} style="accent-color:var(--accent);"> ${f}`;
+  lab.querySelector('input').addEventListener('change', e => bh.setToggles({ [f]: e.target.checked }));
+  featWrap.appendChild(lab);
+});
+
 document.getElementById('quality').addEventListener('change', (e) => bh.setQuality(e.target.value));
 document.getElementById('dump').addEventListener('click', () => {
-  // eslint-disable-next-line no-console
-  console.log('params =', JSON.stringify(bh.params, null, 2), '\nquality =', bh.quality);
+  // full preset blob: toggles + params + quality, ready to paste into PRESETS
+  const blob = JSON.stringify({ toggles: bh.toggles, params: bh.params, quality: bh.quality }, null, 2);
+  const out = document.getElementById('out');
+  out.style.display = 'block';
+  out.value = blob;
+  out.focus(); out.select();                       // selected -> Ctrl+C copies
+  try { navigator.clipboard && navigator.clipboard.writeText(blob); } catch {}
+  console.log(blob);                                // also to devtools if open
 });
 const panel = document.getElementById('panel');
 const toggle = document.getElementById('toggle');
 const fpsEl = document.getElementById('fps');
+const SIDEBAR_W = 320;
 let uiHidden = false;
 function setUI(hidden) {
   uiHidden = hidden;
-  panel.style.display  = hidden ? 'none'  : 'block';
-  toggle.style.display = hidden ? 'block' : 'none';
-  fpsEl.style.display  = hidden ? 'none'  : 'block';   // clean screenshots
+  panel.style.display = hidden ? 'none' : 'block';
+  fpsEl.style.display = hidden ? 'none' : 'block';   // clean screenshots
+  toggle.style.right  = hidden ? '0' : SIDEBAR_W + 'px'; // grip rides the divider / screen edge
+  toggle.textContent  = hidden ? '‹' : '›';             // ‹ pull out · › collapse
+  canvas.style.width  = hidden ? '100vw' : `calc(100vw - ${SIDEBAR_W}px)`;
+  bh.resize();
 }
-document.getElementById('hide').addEventListener('click', () => setUI(true));
-toggle.addEventListener('click', () => setUI(false));
+// the edge grip is the single collapse/expand control
+toggle.addEventListener('click', () => setUI(!uiHidden));
 // press H (or Esc) to toggle the whole UI for a clean view / screenshot
 addEventListener('keydown', (e) => {
   if (e.key === 'h' || e.key === 'H') setUI(!uiHidden);
   else if (e.key === 'Escape' && !uiHidden) setUI(true);
 });
+setUI(false);   // initialize grip position + glyph
 
 // fps meter
 let frames = 0, t0 = performance.now();
@@ -160,6 +198,26 @@ function meter() {
   requestAnimationFrame(meter);
 }
 meter();
+
+// collapsible option groups (wrap each group's content; persist per group)
+document.querySelectorAll('#panel .grp').forEach(grp => {
+  const t = grp.querySelector('.t');
+  if (!t) return;
+  const label = t.textContent.trim();
+  const body = document.createElement('div');
+  body.className = 'grp-body';
+  while (t.nextSibling) body.appendChild(t.nextSibling);
+  grp.appendChild(body);
+  const chev = document.createElement('span');
+  chev.className = 'chev'; chev.textContent = '▾';
+  t.appendChild(chev);
+  const key = 'tuner.grp.' + label;
+  if (localStorage.getItem(key) === '0') grp.classList.add('collapsed');
+  t.addEventListener('click', () => {
+    grp.classList.toggle('collapsed');
+    localStorage.setItem(key, grp.classList.contains('collapsed') ? '0' : '1');
+  });
+});
 
 addEventListener('resize', () => bh.resize());
 bh.start();

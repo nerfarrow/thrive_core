@@ -16,6 +16,7 @@ import { PRESETS } from '../src/index.js';
 
 export default function BlackHoleBackground({
   params = {},
+  toggles = {},            // enable/disable features, e.g. { nebula: false }
   quality,                 // override preset quality ('low' default via preset)
   opacity = 0.85,          // extra CSS dimming on top of params.intensity
   zIndex = -1,             // sit behind app content
@@ -34,7 +35,8 @@ export default function BlackHoleBackground({
     const renderer = new BlackHoleRenderer(
       canvas,
       { ...preset.params, ...params },
-      { quality: quality || preset.quality, respectReducedMotion: true },
+      { quality: quality || preset.quality, respectReducedMotion: true,
+        toggles: { ...preset.toggles, ...toggles } },
     );
     rendererRef.current = renderer;
 
@@ -72,6 +74,13 @@ export default function BlackHoleBackground({
     const r = rendererRef.current;
     if (r && quality) r.setQuality(quality);
   }, [quality]);
+
+  // live feature toggle changes (recompiles the shader)
+  useEffect(() => {
+    const r = rendererRef.current;
+    if (r) r.setToggles({ ...PRESETS.thriveSubtle.toggles, ...toggles });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [JSON.stringify(toggles)]);
 
   useEffect(() => {
     const r = rendererRef.current;

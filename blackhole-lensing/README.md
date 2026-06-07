@@ -106,6 +106,29 @@ Methods: `start()`, `stop()`, `destroy()`, `resize()`, `setParams(patch)`,
 
 You can also pass a partial: `setQuality({ steps: 120, fpsCap: 24 })`.
 
+### Feature toggles
+
+Each major feature can be switched off, and **disabling truly removes the GPU
+work** — toggles compile the feature in/out via shader `#define`s (not a runtime
+`×0`), and the program recompiles when a toggle flips.
+
+```js
+const bh = new BlackHoleRenderer(canvas, params, { toggles: { nebula: false } });
+bh.setToggles({ stars: false, glow: false });   // recompiles without those
+```
+
+Features (all on by default): `disk`, `beaming`, `stars`, `nebula`, `glow`.
+(`FEATURES` is exported.) The core lensing/integration and shadow are always on
+— they *are* the black hole.
+
+Presets serialize **toggles + params + quality together**, and the demo's
+"log params → console" emits one blob you can paste straight into `PRESETS`:
+
+```json
+{ "toggles": { "disk": true, "beaming": true, "stars": true, "nebula": true, "glow": true },
+  "params": { … }, "quality": "ultra" }
+```
+
 ### Reduced motion
 
 When `prefers-reduced-motion: reduce` is set (and `respectReducedMotion`),
