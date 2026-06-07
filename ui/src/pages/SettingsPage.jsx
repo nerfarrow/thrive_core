@@ -22,6 +22,27 @@ function Badge({ kind }) {
   return <span style={{ fontSize: 9, padding: '2px 8px', borderRadius: 4, background: s.bg, color: s.c, fontFamily: 'monospace', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{kind}</span>
 }
 
+// iOS-style toggle switch + a small labelled wrapper
+function Switch({ on, onChange, disabled, color = '#22c55e' }) {
+  return (
+    <button role="switch" aria-checked={on} disabled={disabled} onClick={() => onChange(!on)}
+      style={{ width: 34, height: 20, borderRadius: 999, border: 'none', padding: 0, flexShrink: 0,
+        cursor: disabled ? 'default' : 'pointer', opacity: disabled ? 0.5 : 1,
+        background: on ? color : 'var(--bg-tertiary,#333)', position: 'relative', transition: 'background 0.15s' }}>
+      <span style={{ position: 'absolute', top: 2, left: on ? 16 : 2, width: 16, height: 16, borderRadius: '50%',
+        background: '#fff', transition: 'left 0.15s' }} />
+    </button>
+  )
+}
+function SwitchField({ label, on, onChange, disabled, color }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
+      <Switch on={on} onChange={onChange} disabled={disabled} color={color} />
+      <span style={{ fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-tertiary,#666)' }}>{label}</span>
+    </div>
+  )
+}
+
 // Collapsible settings card. Open/closed state is remembered per-title in
 // localStorage. `right` header controls only show when expanded.
 function CollapsibleCard({ title, right, defaultOpen = true, children }) {
@@ -64,6 +85,31 @@ function ModuleRow({ m, i, saving, editable, onIcon, onColor, children }) {
 
 function GroupHead({ children }) {
   return <div style={{ padding: '8px 16px', fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--text-tertiary,#555)', background: 'var(--bg-tertiary,#222)' }}>{children}</div>
+}
+
+const UI_ALPHA_KEY = 'thrivecore:uiAlpha'
+
+function UISection() {
+  const [alpha, setAlpha] = useState(() => {
+    const v = parseFloat(localStorage.getItem(UI_ALPHA_KEY))
+    return isNaN(v) ? 1 : v
+  })
+  const apply = (v) => {
+    setAlpha(v)
+    document.documentElement.style.setProperty('--ui-alpha', String(v))
+    try { localStorage.setItem(UI_ALPHA_KEY, String(v)) } catch {}
+  }
+  return (
+    <div style={body} title="Lower to let the background show through panels & nav.">
+      <div style={{ ...lbl, display: 'flex', justifyContent: 'space-between' }}>
+        <span>UI opacity</span>
+        <b style={{ color: 'var(--text-secondary,#aaa)' }}>{Math.round(alpha * 100)}%</b>
+      </div>
+      <input type="range" min="0.3" max="1" step="0.01" value={alpha}
+        title="Lower to let the background show through panels & nav."
+        onChange={e => apply(parseFloat(e.target.value))} style={{ width: '100%', accentColor: '#8b5cf6' }} />
+    </div>
+  )
 }
 
 function ModulesSection() {
@@ -122,30 +168,23 @@ function ModulesSection() {
     </div>
   )
 
-  const actionBtn = (m, label, color, onClick) => (
-    <button onClick={() => onClick(m)} disabled={saving === m.id}
-      style={{ ...btnS, padding: '4px 12px', fontSize: 10, opacity: saving === m.id ? 0.5 : 1, color, borderColor: color }}>
-      {saving === m.id ? '…' : label}
-    </button>
-  )
-
   return (
     <div>
       {installed.length > 0 && <GroupHead>Installed</GroupHead>}
       {installed.map((m, i) => (
         <ModuleRow key={m.id} m={m} i={i} saving={saving} editable={isAdmin} onIcon={setIcon} onColor={setColor}>
-          {!m.enabled && <span style={{ fontSize: 10, color: 'var(--text-tertiary,#666)', fontFamily: 'monospace' }}>disabled</span>}
-          {actionBtn(m, m.enabled ? 'Disable' : 'Enable',
-            m.enabled ? 'var(--color-danger,#ef4444)' : 'var(--color-success,#22c55e)', toggle)}
-          {actionBtn(m, 'Uninstall', 'var(--text-tertiary,#888)', uninstall)}
+          <SwitchField label="On" on={m.enabled} disabled={saving === m.id}
+            onChange={() => toggle(m)} color="var(--color-success,#22c55e)" />
+          <SwitchField label="Installed" on={true} disabled={saving === m.id}
+            onChange={() => uninstall(m)} color="#6366f1" />
         </ModuleRow>
       ))}
 
       {available.length > 0 && <GroupHead>Available</GroupHead>}
       {available.map((m, i) => (
         <ModuleRow key={m.id} m={m} i={i} saving={saving} editable={isAdmin} onIcon={setIcon} onColor={setColor}>
-          <span style={{ fontSize: 10, color: 'var(--text-tertiary,#666)', fontFamily: 'monospace' }}>not installed</span>
-          {actionBtn(m, 'Install', 'var(--color-success,#22c55e)', install)}
+          <SwitchField label="Install" on={false} disabled={saving === m.id}
+            onChange={() => install(m)} color="#6366f1" />
         </ModuleRow>
       ))}
 
@@ -312,6 +351,10 @@ export default function SettingsPage() {
       )}
 
       {user?.role === 'admin' && <AccountsSection />}
+
+      <CollapsibleCard title="UI" defaultOpen={false}>
+        <UISection />
+      </CollapsibleCard>
 
       <CollapsibleCard title="Modules">
         <ModulesSection />
