@@ -29,14 +29,21 @@ const CATEGORIES = [
     '❤️ 🧡 💛 💚 💙 💜 🖤 🤍 🤎 💔 ❣️ 💕 💞 💓 💗 💖 💘 💝 💟 ☮️ ✝️ ☪️ 🕉️ ☸️ ✡️ 🔯 🕎 ☯️ ☦️ ⛎ ♈ ♉ ♊ ♋ ♌ ♍ ♎ ♏ ♐ ♑ ♒ ♓ 🆔 ⚛️ 🉑 ☢️ ☣️ 📴 📳 ⭕ ✅ ☑️ ✔️ ❌ ❎ ➕ ➖ ➗ ✖️ ♾️ ‼️ ⁉️ ❓ ❗ 〰️ 💱 💲 ⚜️ 🔱 📛 🔰 ⭐ 🌟 ✨ ⚡ 🔥 💥 💫 💯 🎵 🎶 ➰ ➿ ✔️ 🔠 🔡 🔢 🔣 🔤' },
 ]
 
-export default function EmojiPicker({ value, onChange, color, size = 48 }) {
+const COLORS = [
+  '#ef4444', '#f97316', '#f59e0b', '#eab308', '#84cc16', '#22c55e', '#14b8a6', '#06b6d4',
+  '#3b82f6', '#6366f1', '#8b5cf6', '#a855f7', '#ec4899', '#f43f5e', '#64748b', '#e8e6e0',
+]
+
+// When `onColor` is provided the popover also includes colour controls, so a
+// single swatch edits both an emoji and its colour.
+export default function EmojiPicker({ value, onChange, color, onColor, size = 48 }) {
   const [open, setOpen] = useState(false)
   const [pos, setPos] = useState(null)   // {left, top|bottom} viewport coords (fixed)
   const [cat, setCat] = useState(0)
   const [custom, setCustom] = useState('')
   const ref = useRef(null)
   const btnRef = useRef(null)
-  const W = 280, H = 320
+  const W = 280, H = onColor ? 410 : 320
 
   useEffect(() => {
     if (!open) return
@@ -118,6 +125,28 @@ export default function EmojiPicker({ value, onChange, color, size = 48 }) {
                 border: '1px solid var(--border-color,#333)', borderRadius: 6, color: 'var(--text-secondary,#aaa)',
                 cursor: 'pointer', padding: '0 10px' }}>Set</button>
           </div>
+
+          {/* colour section (only when an onColor handler is provided) */}
+          {onColor && (
+            <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid var(--border-color,#2a2a2a)' }}>
+              <div style={{ fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-tertiary,#666)', marginBottom: 6 }}>Color</div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(8, 1fr)', gap: 4 }}>
+                {COLORS.map(c => (
+                  <button key={c} type="button" onClick={() => onColor(c)} title={c}
+                    style={{ width: 20, height: 20, borderRadius: '50%', background: c, cursor: 'pointer', justifySelf: 'center',
+                      border: (color || '').toLowerCase() === c.toLowerCase() ? '2px solid var(--text-primary,#e8e6e0)' : '2px solid transparent' }} />
+                ))}
+              </div>
+              <div style={{ display: 'flex', gap: 6, marginTop: 8, alignItems: 'center' }}>
+                <input type="color" value={color || '#666666'} onChange={e => onColor(e.target.value)}
+                  style={{ width: 30, height: 28, padding: 0, border: 'none', background: 'none', cursor: 'pointer' }} />
+                <input type="text" value={color || ''} maxLength={7} placeholder="#rrggbb"
+                  onChange={e => onColor(e.target.value)}
+                  style={{ flex: 1, fontFamily: 'monospace', fontSize: 12, background: 'var(--bg-tertiary,#222)',
+                    border: '1px solid var(--border-color,#333)', borderRadius: 6, color: 'inherit', padding: '5px', outline: 'none', minWidth: 0 }} />
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

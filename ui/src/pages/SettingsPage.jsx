@@ -2,7 +2,7 @@
 // SettingsPage.jsx — Platform settings (account, modules)
 // thrive_core UI — user management lives on its own page (UsersPage / 👥)
 // =============================================================================
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { api } from '../api'
 import PlaidPanel from './PlaidPanel'
@@ -46,11 +46,12 @@ function CollapsibleCard({ title, right, defaultOpen = true, children }) {
   )
 }
 
-function ModuleRow({ m, i, saving, editable, onIcon, children }) {
+function ModuleRow({ m, i, saving, editable, onIcon, onColor, children }) {
   return (
     <div style={{ padding: '12px 16px', borderTop: i === 0 ? 'none' : '1px solid var(--border-color,#2a2a2a)', display: 'flex', alignItems: 'center', gap: 12, opacity: m.installed ? 1 : 0.7 }}>
       {editable
-        ? <EmojiPicker value={m.icon || '📦'} color={m.color} size={32} onChange={em => onIcon(m, em)} />
+        ? <EmojiPicker value={m.icon || '📦'} color={m.color} size={34}
+            onChange={em => onIcon(m, em)} onColor={c => onColor(m, c)} />
         : <span style={{ fontSize: 20 }}>{m.icon || '📦'}</span>}
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: 13, fontWeight: 500 }}>{m.name} <span style={{ fontSize: 10, color: 'var(--text-tertiary,#666)', fontFamily: 'monospace' }}>v{m.version}</span></div>
@@ -82,6 +83,17 @@ function ModulesSection() {
       setModules(prev => prev.map(x => x.id === m.id ? { ...x, icon } : x))
       window.dispatchEvent(new CustomEvent('thrivecore:modules-changed'))
     } catch {}
+  }
+
+  // change a module's color — preview live in the row; debounce the write +
+  // nav refresh so dragging the native colour picker doesn't spam the API.
+  const colorTimers = useRef({})
+  const setColor = (m, color) => {
+    setModules(prev => prev.map(x => x.id === m.id ? { ...x, color } : x))
+    clearTimeout(colorTimers.current[m.id])
+    colorTimers.current[m.id] = setTimeout(async () => {
+      try { await api.patch(`/modules/${m.id}`, { color }); window.dispatchEvent(new CustomEvent('thrivecore:modules-changed')) } catch {}
+    }, 300)
   }
 
   // core modules (e.g. platform infra) aren't shown as installable/toggleable here.
@@ -121,7 +133,7 @@ function ModulesSection() {
     <div>
       {installed.length > 0 && <GroupHead>Installed</GroupHead>}
       {installed.map((m, i) => (
-        <ModuleRow key={m.id} m={m} i={i} saving={saving} editable={isAdmin} onIcon={setIcon}>
+        <ModuleRow key={m.id} m={m} i={i} saving={saving} editable={isAdmin} onIcon={setIcon} onColor={setColor}>
           {!m.enabled && <span style={{ fontSize: 10, color: 'var(--text-tertiary,#666)', fontFamily: 'monospace' }}>disabled</span>}
           {actionBtn(m, m.enabled ? 'Disable' : 'Enable',
             m.enabled ? 'var(--color-danger,#ef4444)' : 'var(--color-success,#22c55e)', toggle)}
@@ -131,7 +143,7 @@ function ModulesSection() {
 
       {available.length > 0 && <GroupHead>Available</GroupHead>}
       {available.map((m, i) => (
-        <ModuleRow key={m.id} m={m} i={i} saving={saving} editable={isAdmin} onIcon={setIcon}>
+        <ModuleRow key={m.id} m={m} i={i} saving={saving} editable={isAdmin} onIcon={setIcon} onColor={setColor}>
           <span style={{ fontSize: 10, color: 'var(--text-tertiary,#666)', fontFamily: 'monospace' }}>not installed</span>
           {actionBtn(m, 'Install', 'var(--color-success,#22c55e)', install)}
         </ModuleRow>

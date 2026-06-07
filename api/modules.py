@@ -43,10 +43,12 @@ def init_modules_table():
         if "installed" not in cols:
             conn.execute("ALTER TABLE modules ADD COLUMN installed INTEGER DEFAULT 0")
             conn.execute("UPDATE modules SET installed=1 WHERE enabled=1")
-        # migration: user icon override — set from the UI, never clobbered by the
-        # module.json sync (which only writes `icon`, the default).
+        # migrations: user icon/color overrides — set from the UI, never clobbered
+        # by the module.json sync (which only writes the `icon`/`color` defaults).
         if "icon_override" not in cols:
             conn.execute("ALTER TABLE modules ADD COLUMN icon_override TEXT")
+        if "color_override" not in cols:
+            conn.execute("ALTER TABLE modules ADD COLUMN color_override TEXT")
         conn.commit()
     finally:
         conn.close()
@@ -154,32 +156,38 @@ def load_module_routers(app: FastAPI, discovered: list[dict], active_ids: set[st
 # ── public api ────────────────────────────────────────────────────────────────
 def list_modules() -> list[dict]:
     """Return all registered modules with enabled state — for the frontend.
-    `icon` is the effective icon (user override if set, else the module.json
-    default, which is also exposed as `icon_default`)."""
+    `icon`/`color` are the effective values (user override if set, else the
+    module.json default, also exposed as `icon_default`/`color_default`)."""
     conn = get_db()
     try:
         rows = [dict(r) for r in conn.execute("SELECT * FROM modules ORDER BY id").fetchall()]
         for d in rows:
-            d["icon_default"] = d.get("icon")
-            if d.get("icon_override"):
-                d["icon"] = d["icon_override"]
+            d["icon_default"]  = d.get("icon")
+            d["color_default"] = d.get("color")
+            if d.get("icon_override"):  d["icon"]  = d["icon_override"]
+            if d.get("color_override"): d["color"] = d["color_override"]
         return rows
     finally:
         conn.close()
 
 
-def set_module_icon(module_id: str, icon: str | None) -> bool:
-    """Set (or clear, when blank) a module's icon override."""
+def _set_module_field(module_id: str, column: str, value: str | None) -> bool:
     conn = get_db()
     try:
         if not conn.execute("SELECT id FROM modules WHERE id=?", (module_id,)).fetchone():
             return False
-        val = (icon or "").strip() or None   # blank -> clear override, revert to default
-        conn.execute("UPDATE modules SET icon_override=? WHERE id=?", (val, module_id))
+        val = (value or "").strip() or None   # blank -> clear override, revert to default
+        conn.execute(f"UPDATE modules SET {column}=? WHERE id=?", (val, module_id))
         conn.commit()
         return True
     finally:
         conn.close()
+
+def set_module_icon(module_id: str, icon: str | None) -> bool:
+    return _set_module_field(module_id, "icon_override", icon)
+
+def set_module_color(module_id: str, color: str | None) -> bool:
+    return _set_module_field(module_id, "color_override", color)
 
 def is_core_module(module_id: str) -> bool:
     """Core modules (e.g. users) are required for the platform and can't be disabled."""

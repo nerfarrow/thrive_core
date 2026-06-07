@@ -53,9 +53,12 @@ def update_module(module_id: str, request: Request, body: dict):
     if not user or user.get("role") != "admin":
         raise HTTPException(status_code=403, detail="Admin only")
 
-    # icon override — takes effect immediately (no restart needed)
-    if "icon" in body:
-        if not mod_registry.set_module_icon(module_id, body.get("icon")):
+    # icon / color overrides — take effect immediately (no restart needed)
+    if "icon" in body or "color" in body:
+        ok = True
+        if "icon" in body:  ok = ok and mod_registry.set_module_icon(module_id, body.get("icon"))
+        if "color" in body: ok = ok and mod_registry.set_module_color(module_id, body.get("color"))
+        if not ok:
             raise HTTPException(status_code=404, detail="Module not found")
         return {"ok": True}
 
