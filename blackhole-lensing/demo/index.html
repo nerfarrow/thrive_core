@@ -132,12 +132,24 @@ document.getElementById('dump').addEventListener('click', () => {
 });
 const panel = document.getElementById('panel');
 const toggle = document.getElementById('toggle');
-document.getElementById('hide').addEventListener('click', () => { panel.style.display='none'; toggle.style.display='block'; });
-toggle.addEventListener('click', () => { panel.style.display='block'; toggle.style.display='none'; });
+const fpsEl = document.getElementById('fps');
+let uiHidden = false;
+function setUI(hidden) {
+  uiHidden = hidden;
+  panel.style.display  = hidden ? 'none'  : 'block';
+  toggle.style.display = hidden ? 'block' : 'none';
+  fpsEl.style.display  = hidden ? 'none'  : 'block';   // clean screenshots
+}
+document.getElementById('hide').addEventListener('click', () => setUI(true));
+toggle.addEventListener('click', () => setUI(false));
+// press H (or Esc) to toggle the whole UI for a clean view / screenshot
+addEventListener('keydown', (e) => {
+  if (e.key === 'h' || e.key === 'H') setUI(!uiHidden);
+  else if (e.key === 'Escape' && !uiHidden) setUI(true);
+});
 
 // fps meter
 let frames = 0, t0 = performance.now();
-const fpsEl = document.getElementById('fps');
 function meter() {
   frames++;
   const now = performance.now();
