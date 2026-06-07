@@ -376,7 +376,7 @@ export default function CategoryBreakdown() {
   const rangeQS = rangeType === "custom" ? `range=custom&from=${fromDate}&to=${toDate}` : `range=${rangeType}`;
 
   return (
-    <div style={{ padding: "1.5rem 1.5rem 3rem", maxWidth: 900, margin: "0 auto" }}>
+    <div style={{ padding: "1.5rem 1.5rem 3rem" }}>
       <div style={{ marginBottom: "1.5rem", display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
         <div>
           <h1 style={{ fontSize: 14, fontWeight: 500, letterSpacing: "0.15em", textTransform: "uppercase", margin: 0 }}>Category Breakdown</h1>

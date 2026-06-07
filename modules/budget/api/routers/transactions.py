@@ -209,13 +209,30 @@ def _row_to_dict(r, splits_map=None):
 # Routes
 # =============================================================================
 
+# columns the UI may sort by → safe SQL expressions (whitelist; never interpolate raw)
+_SORT_COLUMNS = {
+    "date":     "t.date",
+    "payee":    "p.name",
+    "category": "category_name",
+    "memo":     "t.memo",
+    "amount":   "t.amount_cents",
+    "account":  "a.name",
+    "status":   "t.cleared",
+}
+
+
 @router.get("/")
 def list_transactions(
-    account_id: Optional[int] = Query(None),
-    from_date:  Optional[str] = Query(None),
-    to_date:    Optional[str] = Query(None),
-    limit:      int           = Query(50, le=500),
-    offset:     int           = Query(0, ge=0),
+    account_id:  Optional[int] = Query(None),
+    from_date:   Optional[str] = Query(None),
+    to_date:     Optional[str] = Query(None),
+    payee_id:    Optional[int] = Query(None),
+    category_id: Optional[int] = Query(None),
+    memo:        Optional[str] = Query(None),
+    sort:        str           = Query("date"),
+    direction:   str           = Query("desc", alias="dir"),
+    limit:       int           = Query(50, le=500),
+    offset:      int           = Query(0, ge=0),
     db=Depends(get_db),
 ):
     where  = []
@@ -229,18 +246,35 @@ def list_transactions(
     if to_date:
         where.append("t.date <= ?")
         params.append(to_date)
+    if payee_id:
+        where.append("t.payee_id = ?")
+        params.append(payee_id)
+    if category_id:
+        # match the category itself OR (if it's a parent) any of its children
+        where.append("(t.category_id = ? OR c.parent_id = ?)")
+        params.extend([category_id, category_id])
+    if memo:
+        where.append("(t.memo LIKE ? OR t.import_description LIKE ?)")
+        params.extend([f"%{memo}%", f"%{memo}%"])
 
     clause = ("WHERE " + " AND ".join(where)) if where else ""
+
+    sort_col = _SORT_COLUMNS.get(sort, "t.date")
+    sort_dir = "ASC" if str(direction).lower() == "asc" else "DESC"
+    order_by = f"{sort_col} {sort_dir}, t.id DESC"
 
     rows = db.execute(f"""
         {_SELECT}
         {clause}
-        ORDER BY t.date DESC, t.id DESC
+        ORDER BY {order_by}
         LIMIT ? OFFSET ?
     """, params + [limit, offset]).fetchall()
 
+    # running balance is only meaningful in the natural chronological order
+    chronological = sort == "date" and sort_dir == "DESC"
+
     running = None
-    if account_id:
+    if account_id and chronological:
         # Total cleared/reconciled balance for the account (Unverified excluded — they
         # don't move the running balance in the loop below either).
         total = db.execute(

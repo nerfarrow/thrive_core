@@ -66,6 +66,16 @@
     background: var(--bg-elevated);
 }
 
+.txn-header .txn-sortable {
+    cursor: pointer;
+    user-select: none;
+    transition: color 0.12s;
+}
+
+.txn-header .txn-sortable:hover {
+    color: var(--text);
+}
+
 .txn-header:hover {
     background: var(--bg-elevated);
 }

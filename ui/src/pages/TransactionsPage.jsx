@@ -13,6 +13,7 @@ import TransactionForm from '../components/TransactionForm'
 import ImportPanel from '../components/ImportPanel'
 import VerifyMatchPopup from '../components/VerifyMatchPopup'
 import BulkActionBar from '../components/BulkActionBar'
+import FilterCombo from '../components/FilterCombo'
 import './Page.css'
 
 const PAGE_SIZE = 50
@@ -37,6 +38,18 @@ export default function TransactionsPage({ initial = {}, onBalanceChange }) {
     const [accountId, setAccountId] = useState(initial.accountId ? String(initial.accountId) : '')
     const [fromDate, setFromDate] = useState('')
     const [toDate, setToDate] = useState('')
+    const [payeeId, setPayeeId] = useState('')
+    const [categoryId, setCategoryId] = useState('')
+    const [memoSearch, setMemoSearch] = useState('')
+    const [memoQuery, setMemoQuery] = useState('')   // debounced memo for fetching
+    const [sort, setSort] = useState('date')
+    const [dir, setDir] = useState('desc')
+
+    // debounce free-text memo search so we don't fire a request per keystroke
+    useEffect(() => {
+        const id = setTimeout(() => setMemoQuery(memoSearch.trim()), 350)
+        return () => clearTimeout(id)
+    }, [memoSearch])
 
     const [showAdd, setShowAdd] = useState(false)
     const [showImport, setShowImport] = useState(!!initial.plaidRows)
@@ -73,6 +86,11 @@ export default function TransactionsPage({ initial = {}, onBalanceChange }) {
         if (accountId) params.set('account_id', accountId)
         if (fromDate) params.set('from_date', fromDate)
         if (toDate) params.set('to_date', toDate)
+        if (payeeId) params.set('payee_id', payeeId)
+        if (categoryId) params.set('category_id', categoryId)
+        if (memoQuery) params.set('memo', memoQuery)
+        params.set('sort', sort)
+        params.set('dir', dir)
         params.set('limit', PAGE_SIZE)
         params.set('offset', currentOffset)
         try {
@@ -93,12 +111,12 @@ export default function TransactionsPage({ initial = {}, onBalanceChange }) {
         }
     }
 
-    // Reset and reload from the top whenever filters change
+    // Reset and reload from the top whenever filters or sort change
     useEffect(() => {
         setOffset(0)
         setHasMore(true)
         fetchPage(0, true)
-    }, [accountId, fromDate, toDate])
+    }, [accountId, fromDate, toDate, payeeId, categoryId, memoQuery, sort, dir])
 
     useEffect(() => { loadLookups() }, [])
     useEffect(() => {
@@ -113,7 +131,7 @@ export default function TransactionsPage({ initial = {}, onBalanceChange }) {
         if (entries[0].isIntersecting && hasMore && !loading && !loadingMore) {
             fetchPage(offset)
         }
-    }, [hasMore, loading, loadingMore, offset, accountId, fromDate, toDate])
+    }, [hasMore, loading, loadingMore, offset, accountId, fromDate, toDate, payeeId, categoryId, memoQuery, sort, dir])
 
     useEffect(() => {
         const el = sentinelRef.current
@@ -245,6 +263,34 @@ export default function TransactionsPage({ initial = {}, onBalanceChange }) {
     const allSelected = transactions.length > 0 && selected.size === transactions.length
     const someSelected = selected.size > 0 && !allSelected
 
+    // filter-control helpers
+    const sortedPayees = [...payees].sort((a, b) => a.name.localeCompare(b.name))
+    const mainCats = categories.filter(c => c.parent_id === null).sort((a, b) => a.name.localeCompare(b.name))
+    const childrenOf = (pid) => categories.filter(c => c.parent_id === pid).sort((a, b) => a.name.localeCompare(b.name))
+    const filtersActive = !!(fromDate || toDate || payeeId || categoryId || memoSearch)
+
+    // combobox option lists (category options are flattened: "Parent" + "Parent: Sub")
+    const payeeOptions = sortedPayees.map(p => ({ id: p.id, label: p.name }))
+    const categoryOptions = mainCats.flatMap(p => [
+        { id: p.id, label: p.name },
+        ...childrenOf(p.id).map(ch => ({ id: ch.id, label: `${p.name}: ${ch.name}` })),
+    ])
+
+    // chronological order is required for the running-balance column to be meaningful
+    const chronological = sort === 'date' && dir === 'desc'
+    const showBalanceCol = !!accountId && chronological
+
+    // clickable column header: toggle direction if already active, else activate (date defaults desc, others asc)
+    function toggleSort(col) {
+        if (sort === col) setDir(d => (d === 'asc' ? 'desc' : 'asc'))
+        else { setSort(col); setDir(col === 'date' || col === 'amount' ? 'desc' : 'asc') }
+    }
+    const sortArrow = (col) => (sort === col ? (dir === 'asc' ? ' ▲' : ' ▼') : '')
+
+    function clearFilters() {
+        setFromDate(''); setToDate(''); setPayeeId(''); setCategoryId(''); setMemoSearch('')
+    }
+
     // ── Render ────────────────────────────────────────────────────────────────
 
     return (
@@ -262,8 +308,14 @@ export default function TransactionsPage({ initial = {}, onBalanceChange }) {
                     <option value="">All accounts</option>
                     {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
                 </select>
-                <input className="input" type="date" value={fromDate} onChange={e => setFromDate(e.target.value)} />
-                <input className="input" type="date" value={toDate} onChange={e => setToDate(e.target.value)} />
+                <input className="input" type="date" value={fromDate} onChange={e => setFromDate(e.target.value)} title="From date" />
+                <input className="input" type="date" value={toDate} onChange={e => setToDate(e.target.value)} title="To date" />
+                <FilterCombo options={payeeOptions} value={payeeId} onChange={setPayeeId} placeholder="All payees" />
+                <FilterCombo options={categoryOptions} value={categoryId} onChange={setCategoryId} placeholder="All categories" width={190} />
+                <input className="input" type="text" placeholder="Search memo…" value={memoSearch} onChange={e => setMemoSearch(e.target.value)} />
+                {filtersActive && (
+                    <button className="btn" onClick={clearFilters} title="Clear filters">Clear</button>
+                )}
                 <button className="btn btn-primary" onClick={() => {
                     setShowAdd(true); setShowImport(false); setEditingId(null); setPlaidPreload(null)
                 }}>+ Add</button>
@@ -329,7 +381,7 @@ export default function TransactionsPage({ initial = {}, onBalanceChange }) {
             ) : transactions.length === 0 ? (
                 <div className="muted">No transactions match the filters.</div>
             ) : (
-                <div className={`txn-table ${accountId ? 'has-balance' : 'all-accounts'}`}>
+                <div className={`txn-table ${showBalanceCol ? 'has-balance' : (accountId ? '' : 'all-accounts')}`}>
                     <div className="txn-row txn-header">
                         <input
                             type="checkbox"
@@ -339,14 +391,14 @@ export default function TransactionsPage({ initial = {}, onBalanceChange }) {
                             onChange={toggleSelectAll}
                             title="Select all"
                         />
-                        <span className="txn-status-col" title="○ uncleared · ◐ cleared · ● reconciled"></span>
-                        <span>Date</span>
-                        {!accountId && <span>Account</span>}
-                        <span>Payee</span>
-                        <span>Category</span>
-                        <span>Memo</span>
-                        <span className="txn-amount-col">Amount</span>
-                        {accountId && <span className="txn-amount-col">Balance</span>}
+                        <span className="txn-status-col txn-sortable" title="Sort by status (○ uncleared · ◐ cleared · ● reconciled)" onClick={() => toggleSort('status')}>{sortArrow('status').trim() || '·'}</span>
+                        <span className="txn-sortable" onClick={() => toggleSort('date')}>Date{sortArrow('date')}</span>
+                        {!accountId && <span className="txn-sortable" onClick={() => toggleSort('account')}>Account{sortArrow('account')}</span>}
+                        <span className="txn-sortable" onClick={() => toggleSort('payee')}>Payee{sortArrow('payee')}</span>
+                        <span className="txn-sortable" onClick={() => toggleSort('category')}>Category{sortArrow('category')}</span>
+                        <span className="txn-sortable" onClick={() => toggleSort('memo')}>Memo{sortArrow('memo')}</span>
+                        <span className="txn-amount-col txn-sortable" onClick={() => toggleSort('amount')}>Amount{sortArrow('amount')}</span>
+                        {showBalanceCol && <span className="txn-amount-col">Balance</span>}
                     </div>
                     {(() => {
                         // Reorder so matched pairs are always adjacent, preventing
@@ -406,7 +458,7 @@ export default function TransactionsPage({ initial = {}, onBalanceChange }) {
                             ) : (
                                 <TransactionRow
                                     key={t.id} t={t}
-                                    showBalance={!!accountId} showAccount={!accountId}
+                                    showBalance={showBalanceCol} showAccount={!accountId}
                                     selected={selected.has(t.id)}
                                     onSelect={() => toggleSelect(t.id)}
                                     onEdit={() => {
