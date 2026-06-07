@@ -7,7 +7,6 @@
 // controls, save/delete, "set as background", and a way back to thrive.
 // =============================================================================
 import { useEffect, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { api } from '../api'
 import { useToast } from '../context/ToastContext'
 import { BlackHoleRenderer, PRESETS, DEFAULT_PARAMS, DEFAULT_TOGGLES, FEATURES } from 'blackhole-lensing/src/index.js'
@@ -20,7 +19,10 @@ const BUILTINS = [
   { key: 'b:thriveSubtle', name: 'Subtle (built-in)',       data: { ...PRESETS.thriveSubtle } },
 ]
 
-const panel = { background: 'rgba(14,18,24,0.92)', border: '1px solid var(--border-color,#2a2a2a)', borderRadius: 10, padding: 14, backdropFilter: 'blur(6px)' }
+// panel/grip backgrounds scale with the global UI opacity (Settings → UI) so the
+// black hole shows through them at lower opacity, just like the rest of the UI.
+const PANEL_BG = 'rgba(14,18,24, calc(0.92 * var(--ui-alpha, 1)))'
+const panel = { background: PANEL_BG, border: '1px solid var(--border-color,#2a2a2a)', borderRadius: 10, padding: 14, backdropFilter: 'blur(6px)' }
 const btnS  = { fontFamily: 'monospace', fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', background: 'none', border: '1px solid var(--border-color,#333)', borderRadius: 6, color: 'var(--text-secondary,#aaa)', cursor: 'pointer', padding: '6px 10px' }
 const btnP  = { ...btnS, background: 'var(--text-primary,#e8e6e0)', color: 'var(--bg-primary,#0f0f0f)', border: 'none', fontWeight: 600 }
 const inp   = { fontFamily: 'monospace', fontSize: 12, background: 'var(--bg-tertiary,#222)', border: '1px solid var(--border-color,#333)', borderRadius: 6, color: 'inherit', padding: '6px 8px', width: '100%', boxSizing: 'border-box' }
@@ -29,7 +31,7 @@ const lbl   = { fontSize: 10, color: 'var(--text-tertiary,#666)', textTransform:
 // full in-app tuner — mirrors the standalone demo's controls
 const GROUPS = [
   { t: 'Camera', rows: [
-    { k: 'camDist',     label: 'Distance',  min: 8,    max: 40,  step: 0.5 },
+    { k: 'camDist',     label: 'Distance',  min: 8,    max: 200, step: 0.5 },
     { k: 'inclination', label: 'Tilt',      min: 0,    max: 1.4, step: 0.005 },
     { k: 'fov',         label: 'Zoom',      min: 0.4,  max: 2.5, step: 0.01 },
     { k: 'offsetX',     label: 'Offset X',  min: -0.5, max: 0.5, step: 0.01 },
@@ -54,8 +56,9 @@ const GROUPS = [
 ]
 const QUALITIES = ['ultra', 'high', 'medium', 'low', 'potato']
 
+const SIDEBAR_W = 260
+
 export default function BlackHolePage() {
-  const navigate = useNavigate()
   const { showToast } = useToast()
   const canvasRef = useRef(null)
   const bhRef = useRef(null)
@@ -64,6 +67,7 @@ export default function BlackHolePage() {
   const [qual, setQual] = useState(PRESETS.artwall.quality) // quality preset name
   const [, force] = useState(0)                       // re-render for slider readouts
   const [saveName, setSaveName] = useState('')
+  const [collapsed, setCollapsed] = useState(false)  // popout panel state
 
   // create the renderer once
   useEffect(() => {
@@ -77,11 +81,39 @@ export default function BlackHolePage() {
     bh.start()
     const onResize = () => bh.resize()
     window.addEventListener('resize', onResize)
-    return () => { window.removeEventListener('resize', onResize); bh.destroy(); bhRef.current = null }
+
+    // mouse wheel zooms the camera in/out (camDist). Exponential so each notch
+    // feels even across the range; clamped to the Distance slider's bounds.
+    const onWheel = (e) => {
+      e.preventDefault()
+      const next = Math.min(200, Math.max(8, bh.params.camDist * Math.exp(e.deltaY * 0.0015)))
+      bh.setParams({ camDist: next })
+      force(n => n + 1)   // keep the Distance readout/slider in sync
+    }
+    canvas.addEventListener('wheel', onWheel, { passive: false })
+
+    return () => {
+      window.removeEventListener('resize', onResize)
+      canvas.removeEventListener('wheel', onWheel)
+      bh.destroy(); bhRef.current = null
+    }
   }, [])
 
   const loadPresets = () => api.get('/blackhole/presets/').then(setPresets).catch(() => {})
   useEffect(() => { loadPresets() }, [])
+
+  // H toggles the panel, Esc hides it (matches the standalone demo) — ignored
+  // while typing in a field so the save-name input isn't hijacked.
+  useEffect(() => {
+    const onKey = (e) => {
+      const tag = (e.target.tagName || '').toLowerCase()
+      if (tag === 'input' || tag === 'textarea' || tag === 'select') return
+      if (e.key === 'h' || e.key === 'H') setCollapsed(c => !c)
+      else if (e.key === 'Escape') setCollapsed(true)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
 
   // apply a {toggles, params, quality} blob to the live renderer
   const apply = (data) => {
@@ -152,14 +184,29 @@ export default function BlackHolePage() {
   const toggleFeat = (f, on) => { bh && bh.setToggles({ [f]: on }); force(n => n + 1) }
 
   return (
-    <div style={{ position: 'fixed', top: 48, left: 0, right: 0, bottom: 0, overflow: 'hidden' }}>
+    <div style={{ position: 'fixed', inset: 0, overflow: 'hidden' }}>
+      {/* canvas fills the whole viewport — including behind the (translucent) top
+          nav — so lowering UI opacity lets the black hole show through the bar too */}
       <canvas ref={canvasRef} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', display: 'block' }} />
 
-      {/* control panel */}
-      <div style={{ position: 'absolute', top: 16, right: 16, width: 250, ...panel, maxHeight: 'calc(100% - 32px)', overflowY: 'auto' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+      {/* slim full-height grip on the panel divider — click to collapse, and (at
+          the screen edge when collapsed) to pull the panel back out. H / Esc too. */}
+      <button onClick={() => setCollapsed(c => !c)} title={collapsed ? 'Show panel (H)' : 'Hide panel (H)'}
+        style={{
+          position: 'absolute', top: 48, bottom: 0, right: collapsed ? 0 : SIDEBAR_W, width: 18, zIndex: 11,
+          display: 'flex', alignItems: 'center', justifyContent: 'center', margin: 0, padding: 0,
+          border: 'none', borderLeft: '1px solid var(--border-color,#2a2a2a)', borderRadius: 0,
+          background: PANEL_BG, backdropFilter: 'blur(6px)', color: 'var(--text-tertiary,#888)',
+          cursor: 'pointer', fontSize: 15, transition: 'right .15s',
+        }}>
+        {collapsed ? '‹' : '›'}
+      </button>
+
+      {/* control panel — docked right, full height, collapses behind the grip */}
+      {!collapsed && (
+      <div style={{ position: 'absolute', top: 48, right: 0, bottom: 0, width: SIDEBAR_W, ...panel, border: 'none', borderLeft: '1px solid var(--border-color,#2a2a2a)', borderRadius: 0, overflowY: 'auto', zIndex: 10 }}>
+        <div style={{ marginBottom: 12 }}>
           <span style={{ fontSize: 11, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--text-tertiary,#888)' }}>Black Hole</span>
-          <button style={btnS} onClick={() => navigate('/')}>← thrive</button>
         </div>
 
         <div style={{ marginBottom: 12 }}>
@@ -227,6 +274,7 @@ export default function BlackHolePage() {
           </div>
         </div>
       </div>
+      )}
     </div>
   )
 }

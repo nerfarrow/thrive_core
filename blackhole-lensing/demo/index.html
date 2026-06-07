@@ -69,7 +69,7 @@
   </div>
 
   <div class="grp"><div class="t">camera / framing</div>
-    <div class="row" data-r="camDist" data-min="8" data-max="40" data-step="0.5"></div>
+    <div class="row" data-r="camDist" data-min="8" data-max="200" data-step="0.5"></div>
     <div class="row" data-r="inclination" data-min="0" data-max="1.4" data-step="0.005" data-deg="1"></div>
     <div class="row" data-r="fov" data-min="0.4" data-max="2.5" data-step="0.01"></div>
     <div class="row" data-r="offsetX" data-min="-0.5" data-max="0.5" data-step="0.01"></div>
@@ -151,6 +151,16 @@ FEATURES.forEach(f => {
   lab.querySelector('input').addEventListener('change', e => bh.setToggles({ [f]: e.target.checked }));
   featWrap.appendChild(lab);
 });
+
+// mouse wheel zooms camera in/out (camDist), keeping its slider/readout in sync
+canvas.addEventListener('wheel', (e) => {
+  e.preventDefault();
+  const next = Math.min(200, Math.max(8, bh.params.camDist * Math.exp(e.deltaY * 0.0015)));
+  bh.setParams({ camDist: next });
+  const s = document.getElementById('s_camDist'), v = document.getElementById('v_camDist');
+  if (s) s.value = next;
+  if (v) v.textContent = next.toFixed(2);
+}, { passive: false });
 
 document.getElementById('quality').addEventListener('change', (e) => bh.setQuality(e.target.value));
 document.getElementById('dump').addEventListener('click', () => {
