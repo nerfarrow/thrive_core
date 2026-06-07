@@ -8,6 +8,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { api } from '../api'
+import EmojiPicker from '../components/EmojiPicker'
 
 const card = { background: 'var(--bg-secondary,#181818)', border: '1px solid var(--border-color,#2a2a2a)', borderRadius: 10, marginBottom: 16, overflow: 'hidden' }
 const head = { padding: '12px 16px', borderBottom: '1px solid var(--border-color,#2a2a2a)', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--text-tertiary,#666)' }
@@ -34,10 +35,10 @@ function ProfileForm({ value, setValue, onSave, onCancel, saving, submitLabel })
   return (
     <div style={{ padding: 16, borderBottom: '1px solid var(--border-color,#2a2a2a)' }}>
       <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end' }}>
-        <div style={{ width: 64 }}>
+        <div>
           <div style={lbl}>Avatar</div>
-          <input style={{ ...inp, textAlign: 'center', fontSize: 20 }} value={value.avatar} maxLength={2}
-            onChange={e => setValue(p => ({ ...p, avatar: e.target.value }))} />
+          <EmojiPicker value={value.avatar} color={value.color}
+            onChange={em => setValue(p => ({ ...p, avatar: em }))} />
         </div>
         <div style={{ flex: 1 }}>
           <div style={lbl}>Name</div>

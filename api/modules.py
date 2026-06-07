@@ -43,6 +43,10 @@ def init_modules_table():
         if "installed" not in cols:
             conn.execute("ALTER TABLE modules ADD COLUMN installed INTEGER DEFAULT 0")
             conn.execute("UPDATE modules SET installed=1 WHERE enabled=1")
+        # migration: user icon override — set from the UI, never clobbered by the
+        # module.json sync (which only writes `icon`, the default).
+        if "icon_override" not in cols:
+            conn.execute("ALTER TABLE modules ADD COLUMN icon_override TEXT")
         conn.commit()
     finally:
         conn.close()
@@ -149,10 +153,31 @@ def load_module_routers(app: FastAPI, discovered: list[dict], active_ids: set[st
 
 # ── public api ────────────────────────────────────────────────────────────────
 def list_modules() -> list[dict]:
-    """Return all registered modules with enabled state — for the frontend."""
+    """Return all registered modules with enabled state — for the frontend.
+    `icon` is the effective icon (user override if set, else the module.json
+    default, which is also exposed as `icon_default`)."""
     conn = get_db()
     try:
-        return [dict(r) for r in conn.execute("SELECT * FROM modules ORDER BY id").fetchall()]
+        rows = [dict(r) for r in conn.execute("SELECT * FROM modules ORDER BY id").fetchall()]
+        for d in rows:
+            d["icon_default"] = d.get("icon")
+            if d.get("icon_override"):
+                d["icon"] = d["icon_override"]
+        return rows
+    finally:
+        conn.close()
+
+
+def set_module_icon(module_id: str, icon: str | None) -> bool:
+    """Set (or clear, when blank) a module's icon override."""
+    conn = get_db()
+    try:
+        if not conn.execute("SELECT id FROM modules WHERE id=?", (module_id,)).fetchone():
+            return False
+        val = (icon or "").strip() or None   # blank -> clear override, revert to default
+        conn.execute("UPDATE modules SET icon_override=? WHERE id=?", (val, module_id))
+        conn.commit()
+        return True
     finally:
         conn.close()
 

@@ -6,6 +6,7 @@ import { useState, useEffect } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { api } from '../api'
 import PlaidPanel from './PlaidPanel'
+import EmojiPicker from '../components/EmojiPicker'
 
 const card = { background: 'var(--bg-secondary,#181818)', border: '1px solid var(--border-color,#2a2a2a)', borderRadius: 10, marginBottom: 16, overflow: 'hidden' }
 const head = { padding: '12px 16px', borderBottom: '1px solid var(--border-color,#2a2a2a)', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--text-tertiary,#666)' }
@@ -21,10 +22,36 @@ function Badge({ kind }) {
   return <span style={{ fontSize: 9, padding: '2px 8px', borderRadius: 4, background: s.bg, color: s.c, fontFamily: 'monospace', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{kind}</span>
 }
 
-function ModuleRow({ m, i, saving, children }) {
+// Collapsible settings card. Open/closed state is remembered per-title in
+// localStorage. `right` header controls only show when expanded.
+function CollapsibleCard({ title, right, defaultOpen = true, children }) {
+  const key = `settings.open.${title}`
+  const [open, setOpen] = useState(() => {
+    try { const v = localStorage.getItem(key); return v === null ? defaultOpen : v === '1' } catch { return defaultOpen }
+  })
+  const toggle = () => setOpen(o => { const n = !o; try { localStorage.setItem(key, n ? '1' : '0') } catch {} return n })
+  return (
+    <div style={card}>
+      <div onClick={toggle}
+        style={{ ...head, borderBottom: open ? '1px solid var(--border-color,#2a2a2a)' : 'none',
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', userSelect: 'none' }}>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontSize: 9, display: 'inline-block', transition: 'transform 0.15s', transform: open ? 'rotate(90deg)' : 'none' }}>▶</span>
+          {title}
+        </span>
+        {open && right && <span onClick={e => e.stopPropagation()}>{right}</span>}
+      </div>
+      {open && children}
+    </div>
+  )
+}
+
+function ModuleRow({ m, i, saving, editable, onIcon, children }) {
   return (
     <div style={{ padding: '12px 16px', borderTop: i === 0 ? 'none' : '1px solid var(--border-color,#2a2a2a)', display: 'flex', alignItems: 'center', gap: 12, opacity: m.installed ? 1 : 0.7 }}>
-      <span style={{ fontSize: 20 }}>{m.icon || '📦'}</span>
+      {editable
+        ? <EmojiPicker value={m.icon || '📦'} color={m.color} size={32} onChange={em => onIcon(m, em)} />
+        : <span style={{ fontSize: 20 }}>{m.icon || '📦'}</span>}
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: 13, fontWeight: 500 }}>{m.name} <span style={{ fontSize: 10, color: 'var(--text-tertiary,#666)', fontFamily: 'monospace' }}>v{m.version}</span></div>
         <div style={{ fontSize: 11, color: 'var(--text-tertiary,#888)', marginTop: 2 }}>{m.description}</div>
@@ -39,12 +66,23 @@ function GroupHead({ children }) {
 }
 
 function ModulesSection() {
+  const { user }                = useAuth()
+  const isAdmin                 = user?.role === 'admin'
   const [modules,  setModules]  = useState([])
   const [saving,   setSaving]   = useState(null)
 
   useEffect(() => {
     api.get('/modules').then(setModules).catch(() => {})
   }, [])
+
+  // change a module's icon (admin only); takes effect immediately in nav + landing
+  const setIcon = async (m, icon) => {
+    try {
+      await api.patch(`/modules/${m.id}`, { icon })
+      setModules(prev => prev.map(x => x.id === m.id ? { ...x, icon } : x))
+      window.dispatchEvent(new CustomEvent('thrivecore:modules-changed'))
+    } catch {}
+  }
 
   // core modules (e.g. platform infra) aren't shown as installable/toggleable here.
   const visible   = modules.filter(m => !m.core)
@@ -83,7 +121,7 @@ function ModulesSection() {
     <div>
       {installed.length > 0 && <GroupHead>Installed</GroupHead>}
       {installed.map((m, i) => (
-        <ModuleRow key={m.id} m={m} i={i} saving={saving}>
+        <ModuleRow key={m.id} m={m} i={i} saving={saving} editable={isAdmin} onIcon={setIcon}>
           {!m.enabled && <span style={{ fontSize: 10, color: 'var(--text-tertiary,#666)', fontFamily: 'monospace' }}>disabled</span>}
           {actionBtn(m, m.enabled ? 'Disable' : 'Enable',
             m.enabled ? 'var(--color-danger,#ef4444)' : 'var(--color-success,#22c55e)', toggle)}
@@ -93,7 +131,7 @@ function ModulesSection() {
 
       {available.length > 0 && <GroupHead>Available</GroupHead>}
       {available.map((m, i) => (
-        <ModuleRow key={m.id} m={m} i={i} saving={saving}>
+        <ModuleRow key={m.id} m={m} i={i} saving={saving} editable={isAdmin} onIcon={setIcon}>
           <span style={{ fontSize: 10, color: 'var(--text-tertiary,#666)', fontFamily: 'monospace' }}>not installed</span>
           {actionBtn(m, 'Install', 'var(--color-success,#22c55e)', install)}
         </ModuleRow>
@@ -107,7 +145,7 @@ function ModulesSection() {
 }
 
 function AccountsSection() {
-  const { user }              = useAuth()
+  const { user, logout }      = useAuth()
   const [accounts, setAccounts] = useState([])
   const [profiles, setProfiles] = useState([])
   const [adding,   setAdding]   = useState(false)
@@ -144,11 +182,9 @@ function AccountsSection() {
   const doDelete      = async (id)           => { try { await api.del(`/accounts/${id}`); load() } catch (e) { setErr(e.message) } }
 
   return (
-    <div style={card}>
-      <div style={{ ...head, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <span>Accounts</span>
-        {!adding && <button style={{ ...btnP, padding: '4px 12px', fontSize: 10 }} onClick={() => { setAdding(true); setErr(null) }}>+ Add</button>}
-      </div>
+    <CollapsibleCard title="Accounts"
+      right={!adding && <button style={{ ...btnP, padding: '4px 12px', fontSize: 10 }} onClick={() => { setAdding(true); setErr(null) }}>+ Add</button>}>
+
       {err && <div style={{ padding: '8px 16px', fontSize: 12, color: 'var(--color-danger,#ef4444)' }}>{err}</div>}
 
       {adding && (
@@ -184,10 +220,13 @@ function AccountsSection() {
       {accounts.map((a, i) => {
         const ui = rowUi[a.id] || {}
         const isSelf = user && a.id === user.id
+        const activeAdmins = accounts.filter(x => x.role === 'admin' && !x.disabled).length
+        const isLastAdmin = a.role === 'admin' && !a.disabled && activeAdmins <= 1
         return (
           <div key={a.id} style={{ padding: '12px 16px', borderTop: i === 0 ? 'none' : '1px solid var(--border-color,#2a2a2a)' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <div style={{ flex: 1, minWidth: 0 }}>
+                {isSelf && <span title="signed in" style={{ marginRight: 4 }}>🔑</span>}
                 <span style={{ fontSize: 13, fontWeight: 500, marginRight: 8 }}>{a.username}</span>
                 <Badge kind={a.role} />
                 {a.disabled ? <> <Badge kind="disabled" /></> : null}
@@ -201,8 +240,13 @@ function AccountsSection() {
                 </div>
               </div>
               <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-                <button style={{ ...btnS, padding: '3px 9px', fontSize: 10 }} onClick={() => changeRole(a.id, a.role === 'admin' ? 'member' : 'admin')}>{a.role === 'admin' ? 'Make member' : 'Make admin'}</button>
-                <button style={{ ...btnS, padding: '3px 9px', fontSize: 10 }} onClick={() => toggleDisable(a.id, !a.disabled)}>{a.disabled ? 'Enable' : 'Disable'}</button>
+                {isSelf && <button style={{ ...btnS, padding: '3px 9px', fontSize: 10 }} onClick={logout}>Sign out</button>}
+                <button style={{ ...btnS, padding: '3px 9px', fontSize: 10, opacity: isLastAdmin ? 0.4 : 1, cursor: isLastAdmin ? 'not-allowed' : 'pointer' }}
+                  disabled={isLastAdmin} title={isLastAdmin ? "Can't remove the last admin" : ''}
+                  onClick={() => changeRole(a.id, a.role === 'admin' ? 'member' : 'admin')}>{a.role === 'admin' ? 'Make member' : 'Make admin'}</button>
+                <button style={{ ...btnS, padding: '3px 9px', fontSize: 10, opacity: isLastAdmin ? 0.4 : 1, cursor: isLastAdmin ? 'not-allowed' : 'pointer' }}
+                  disabled={isLastAdmin} title={isLastAdmin ? "Can't disable the last admin" : ''}
+                  onClick={() => toggleDisable(a.id, !a.disabled)}>{a.disabled ? 'Enable' : 'Disable'}</button>
                 <button style={{ ...btnS, padding: '3px 9px', fontSize: 10 }} onClick={() => setRow(a.id, { resetting: !ui.resetting })}>Reset pw</button>
                 {ui.confirmDelete
                   ? <><button style={{ ...btnS, padding: '3px 9px', fontSize: 10, color: 'var(--color-danger,#ef4444)', borderColor: 'var(--color-danger,#ef4444)' }} onClick={() => doDelete(a.id)}>Confirm</button><button style={{ ...btnS, padding: '3px 9px', fontSize: 10 }} onClick={() => setRow(a.id, { confirmDelete: false })}>No</button></>
@@ -219,7 +263,7 @@ function AccountsSection() {
           </div>
         )
       })}
-    </div>
+    </CollapsibleCard>
   )
 }
 
@@ -240,10 +284,10 @@ export default function SettingsPage() {
         <h1 style={{ fontSize: 14, fontWeight: 500, letterSpacing: '0.15em', textTransform: 'uppercase' }}>Settings</h1>
       </div>
 
-      {/* Account (self) */}
-      {user && (
-        <div style={card}>
-          <div style={head}>Signed in</div>
+      {/* Account: admins manage everything (incl. their own Sign out) in the
+          Accounts card below; members get a simple identity + Sign out card. */}
+      {user && user.role !== 'admin' && (
+        <CollapsibleCard title="Account">
           <div style={{ ...body, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <span style={{ fontSize: 13 }}>
               {user.profile?.avatar || '👤'} {user.profile?.name || user.username}
@@ -252,26 +296,22 @@ export default function SettingsPage() {
             </span>
             <button style={btnS} onClick={logout}>Sign out</button>
           </div>
-        </div>
+        </CollapsibleCard>
       )}
 
-      {/* Accounts (admin) */}
       {user?.role === 'admin' && <AccountsSection />}
 
-      {/* Modules */}
-      <div style={card}>
-        <div style={head}>Modules</div>
+      <CollapsibleCard title="Modules">
         <ModulesSection />
-      </div>
+      </CollapsibleCard>
 
       {/* Plaid — shown when the Budget module is enabled */}
       {budgetEnabled && (
-        <div style={card}>
-          <div style={head}>Plaid</div>
+        <CollapsibleCard title="Plaid">
           <div style={{ padding: 16 }}>
             <PlaidPanel />
           </div>
-        </div>
+        </CollapsibleCard>
       )}
     </div>
   )

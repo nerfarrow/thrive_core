@@ -1,7 +1,7 @@
 {
   "id": "vault",
   "name": "Vault",
-  "icon": "🔑",
+  "icon": "🔒",
   "description": "Secrets and credentials — self-hosted Vaultwarden client",
   "version": "0.1.0",
   "color": "#f59e0b",
