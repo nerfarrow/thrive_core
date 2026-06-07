@@ -62,7 +62,7 @@ export default function AccountsPage({ onNav, vaultToken }) {
             ])
             setAccounts(acctData)
             setPlaidAcctIds(new Set(connData.map(c => c.account_id)))
-            window.dispatchEvent(new Event('thrivecore:accounts-changed'))
+            window.dispatchEvent(new Event('thrive:accounts-changed'))
         } catch (e) {
             showToast(e.message, 'error')
         } finally {
@@ -233,7 +233,7 @@ export default function AccountsPage({ onNav, vaultToken }) {
             setAccounts(ids.map(id => byId.get(id)))      // optimistic
             try {
                 await api.put('/budget/accounts/reorder', { order: ids })
-                window.dispatchEvent(new Event('thrivecore:accounts-changed'))
+                window.dispatchEvent(new Event('thrive:accounts-changed'))
             } catch (e) {
                 showToast(e.message || 'Reorder failed', 'error')
                 load()

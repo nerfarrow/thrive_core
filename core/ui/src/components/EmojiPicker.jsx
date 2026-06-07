@@ -1,6 +1,6 @@
 // =============================================================================
 // EmojiPicker.jsx — categorized popover emoji chooser (no deps)
-// thrive_core UI — used for profile avatars; reusable for any emoji field.
+// thrive UI — used for profile avatars; reusable for any emoji field.
 //
 // Click the swatch to open; pick a category tab, choose an emoji, or type any
 // emoji in the "custom" box. Closes on outside click / selection. Opens upward

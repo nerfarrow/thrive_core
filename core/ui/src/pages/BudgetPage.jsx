@@ -1,6 +1,6 @@
 // =============================================================================
 // BudgetPage.jsx — Budget module shell: left context sidebar + section content
-// thrive_core UI — reached via the 💰 icon in the top bar (/budget/*)
+// thrive UI — reached via the 💰 icon in the top bar (/budget/*)
 //
 // The monolith ran these as top-level routes with a shared sidebar; here the
 // whole budget app is nested under /budget/* with its own sidebar, so it lives
@@ -49,8 +49,8 @@ function BudgetSidebar({ refreshKey }) {
     const fetchAccounts = () => api.get('/budget/accounts/').then(setAccounts).catch(() => {})
     fetchAccounts()
     // re-fetch when the Accounts page changes the list/order (drag-reorder, add, delete)
-    window.addEventListener('thrivecore:accounts-changed', fetchAccounts)
-    return () => window.removeEventListener('thrivecore:accounts-changed', fetchAccounts)
+    window.addEventListener('thrive:accounts-changed', fetchAccounts)
+    return () => window.removeEventListener('thrive:accounts-changed', fetchAccounts)
   }, [refreshKey])
 
   return (

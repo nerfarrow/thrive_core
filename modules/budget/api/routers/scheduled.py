@@ -1,6 +1,6 @@
 # =============================================================================
 # routers/scheduled.py — Budget module: recurring/scheduled transactions
-# thrive_core module `budget`
+# thrive module `budget`
 # =============================================================================
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
@@ -16,7 +16,7 @@ router = APIRouter(prefix="/scheduled", tags=["scheduled"])
 
 # ── db + money helpers ───────────────────────────────────────────────────────
 def get_db():
-    db = sqlite3.connect(os.environ.get("DB_FILE", "/data/thrivecore.db"), check_same_thread=False)
+    db = sqlite3.connect(os.environ.get("DB_FILE", "/data/thrive.db"), check_same_thread=False)
     db.row_factory = sqlite3.Row
     db.execute("PRAGMA foreign_keys = ON")
     try:

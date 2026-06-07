@@ -1,12 +1,12 @@
 # =============================================================================
 # modules.py — Module discovery, registration, and management
-# thrive_core
+# thrive
 # =============================================================================
 import os, sys, json, sqlite3, importlib.util
 from pathlib import Path
 from fastapi import FastAPI
 
-DB_PATH      = os.environ.get("DB_FILE", "/data/thrivecore.db")
+DB_PATH      = os.environ.get("DB_FILE", "/data/thrive.db")
 MODULES_DIR  = Path(os.environ.get("MODULES_DIR", "/app/modules"))
 
 

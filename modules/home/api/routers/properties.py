@@ -1,14 +1,14 @@
 # =============================================================================
 # routers/properties.py — Home module: properties (primary home + future
 # vacation/travel places)
-# thrive_core module `home`
+# thrive module `home`
 #
 # A "property" is a place — your primary home base today, with room for
 # vacation/travel/other later. Holds address, an optional geocoded pin for the
 # map, size (beds/baths/sqft) and rental/landlord details.
 #
 # Self-contained per the module loader: reuses the platform DB helper so it
-# shares the one thrivecore.db, creates its own table in an idempotent
+# shares the one thrive.db, creates its own table in an idempotent
 # init_db() at import time, and gates writes to admins.
 # =============================================================================
 from fastapi import APIRouter, HTTPException, Request, Query

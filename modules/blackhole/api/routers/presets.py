@@ -1,6 +1,6 @@
 # =============================================================================
 # routers/presets.py — Black Hole module: saved render presets
-# thrive_core module `blackhole`
+# thrive module `blackhole`
 #
 # Stores user-saved looks ({ toggles, params, quality }) so the background and
 # full view can offer a dropdown of presets alongside the library's built-ins.
@@ -15,7 +15,7 @@ router = APIRouter(prefix="/blackhole/presets", tags=["blackhole"])
 
 
 def get_db():
-    db = sqlite3.connect(os.environ.get("DB_FILE", "/data/thrivecore.db"), check_same_thread=False)
+    db = sqlite3.connect(os.environ.get("DB_FILE", "/data/thrive.db"), check_same_thread=False)
     db.row_factory = sqlite3.Row
     try:
         yield db

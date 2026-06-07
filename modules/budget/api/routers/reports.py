@@ -1,6 +1,6 @@
 # =============================================================================
 # routers/reports.py — Budget module: reporting endpoints
-# thrive_core module `budget`
+# thrive module `budget`
 # =============================================================================
 from fastapi import APIRouter, Query
 from typing import Optional

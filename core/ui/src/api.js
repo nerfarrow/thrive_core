@@ -8,7 +8,7 @@ async function request(path, options = {}) {
   })
   if (res.status === 401) {
     if (typeof window !== 'undefined')
-      window.dispatchEvent(new CustomEvent('thrivecore:unauthorized'))
+      window.dispatchEvent(new CustomEvent('thrive:unauthorized'))
   }
   if (!res.ok) {
     let detail = res.statusText

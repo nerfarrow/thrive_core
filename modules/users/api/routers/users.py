@@ -1,13 +1,13 @@
 # =============================================================================
 # routers/users.py — Users module: household profiles
-# thrive_core module `users`
+# thrive module `users`
 #
 # A "user" here is a person/profile in the household — name + avatar, not a
 # login. Login credentials are `accounts`, owned by the core platform and
 # managed in Settings; an account may link to one profile (accounts.user_id).
 # A profile can exist with no account at all (shared/kiosk profile).
 #
-# Reuses the platform's DB helper so it shares the one thrivecore.db.
+# Reuses the platform's DB helper so it shares the one thrive.db.
 # =============================================================================
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel

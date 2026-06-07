@@ -558,7 +558,7 @@ function VehicleCard({ vehicle, onDeleted, showToast, showConfirm }) {
 }
 
 // ── main page ──────────────────────────────────────────────────────────────
-// thrive_core has no toast/confirm context, so fall back to lightweight
+// thrive has no toast/confirm context, so fall back to lightweight
 // defaults: toasts become no-ops, confirms use the native dialog. These resolved
 // helpers are threaded down to every child (cards, panels, the MPG tab).
 export default function VehiclesPage({ showToast: _showToast, showConfirm: _showConfirm }) {

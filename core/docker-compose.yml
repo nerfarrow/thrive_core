@@ -1,14 +1,19 @@
+# Run from thrive/core/. The pluggable modules live one level up at thrive/modules
+# and are bind-mounted in live. Explicit project name keeps container/network/image
+# names stable (thrive_*) regardless of the directory this is launched from.
+name: thrive
+
 services:
   api:
     build: ./api
-    container_name: thrivecore_api
+    container_name: thrive_api
     restart: unless-stopped
     volumes:
       - ./data:/data
-      - ./modules:/app/modules   # modules mounted live — no rebuild needed
+      - ../modules:/app/modules   # modules live at thrive/modules — mounted live, no rebuild
     environment:
       - PYTHONUNBUFFERED=1     # flush print() immediately so [modules] logs aren't buffered
-      - DB_FILE=/data/thrivecore.db
+      - DB_FILE=/data/thrive.db
       - MODULES_DIR=/app/modules
       - COOKIE_SECURE=false   # http dev on :9500 — Secure cookies get dropped over http
       - SESSION_DAYS=30
@@ -24,12 +29,12 @@ services:
       - internal
 
   ui:
-    # context is the repo root so the build can include the shared
+    # context is core/ (this dir) so the build can include the shared
     # blackhole-lensing/ library (imported by the UI via a Vite alias).
     build:
       context: .
       dockerfile: ui/Dockerfile
-    container_name: thrivecore_ui
+    container_name: thrive_ui
     restart: unless-stopped
     ports:
       - "9500:80"
@@ -44,7 +49,7 @@ services:
   # actually reach the app, e.g. http://<nerfBase-ip>:9500/vault.
   vault:
     image: vaultwarden/server:latest
-    container_name: thrivecore_vault
+    container_name: thrive_vault
     restart: unless-stopped
     volumes:
       - ./data/vault:/data

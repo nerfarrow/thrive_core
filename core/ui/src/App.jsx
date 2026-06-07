@@ -1,5 +1,5 @@
 // =============================================================================
-// App.jsx — thrive_core shell
+// App.jsx — thrive shell
 // Minimal: auth gate, top nav, landing, settings
 // =============================================================================
 import { useState, useEffect } from 'react'
@@ -23,7 +23,7 @@ import BlackHoleBackground from 'blackhole-lensing/react/BlackHoleBackground'
 // ── top nav ───────────────────────────────────────────────────────────────────
 // Custom nav icon order is persisted per-device (localStorage) — the icon
 // arrangement is a property of this screen/kiosk, not the account.
-const NAV_ORDER_KEY = 'thrivecore:navOrder'
+const NAV_ORDER_KEY = 'thrive:navOrder'
 const loadNavOrder = () => { try { return JSON.parse(localStorage.getItem(NAV_ORDER_KEY)) || [] } catch { return [] } }
 
 function TopNav() {
@@ -40,8 +40,8 @@ function TopNav() {
     if (!user) { setModules([]); return }
     const fetchModules = () => api.get('/modules').then(setModules).catch(() => {})
     fetchModules()
-    window.addEventListener('thrivecore:modules-changed', fetchModules)
-    return () => window.removeEventListener('thrivecore:modules-changed', fetchModules)
+    window.addEventListener('thrive:modules-changed', fetchModules)
+    return () => window.removeEventListener('thrive:modules-changed', fetchModules)
   }, [user])
 
   // active nav modules, arranged by the saved order; unknown/new ones fall to the end
@@ -129,7 +129,7 @@ function TopNav() {
 // Shown behind all UI when the `blackhole` module is enabled — except on the
 // full /blackhole view, which runs its own (full-quality) canvas. Uses the look
 // the user marked "set as background" (per device), forced to cheap quality.
-const BG_KEY = 'thrivecore:blackhole:bg'
+const BG_KEY = 'thrive:blackhole:bg'
 function AmbientBackground() {
   const { user } = useAuth()
   const location = useLocation()
@@ -143,11 +143,11 @@ function AmbientBackground() {
       .catch(() => {})
     check()
     const onBg = () => { try { setCfg(JSON.parse(localStorage.getItem(BG_KEY))) } catch {} }
-    window.addEventListener('thrivecore:modules-changed', check)
-    window.addEventListener('thrivecore:blackhole-bg-changed', onBg)
+    window.addEventListener('thrive:modules-changed', check)
+    window.addEventListener('thrive:blackhole-bg-changed', onBg)
     return () => {
-      window.removeEventListener('thrivecore:modules-changed', check)
-      window.removeEventListener('thrivecore:blackhole-bg-changed', onBg)
+      window.removeEventListener('thrive:modules-changed', check)
+      window.removeEventListener('thrive:blackhole-bg-changed', onBg)
     }
   }, [user])
 
@@ -220,7 +220,7 @@ function Gate() {
 export default function App() {
   // apply the saved UI opacity globally on load (Settings → UI)
   useEffect(() => {
-    const v = parseFloat(localStorage.getItem('thrivecore:uiAlpha'))
+    const v = parseFloat(localStorage.getItem('thrive:uiAlpha'))
     if (!isNaN(v)) document.documentElement.style.setProperty('--ui-alpha', String(v))
   }, [])
   return (

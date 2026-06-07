@@ -1,6 +1,6 @@
 # =============================================================================
 # routers/accounts.py — Budget module: financial accounts (checking/credit/…)
-# thrive_core module `budget`
+# thrive module `budget`
 #
 # NOTE: namespaced as `budget_accounts` (table) and `/budget/accounts` (route)
 # to avoid colliding with the core auth `accounts` table (login credentials).
@@ -19,7 +19,7 @@ router = APIRouter(prefix="/budget/accounts", tags=["budget-accounts"])
 
 # ── db + money helpers ───────────────────────────────────────────────────────
 def get_db():
-    db = sqlite3.connect(os.environ.get("DB_FILE", "/data/thrivecore.db"), check_same_thread=False)
+    db = sqlite3.connect(os.environ.get("DB_FILE", "/data/thrive.db"), check_same_thread=False)
     db.row_factory = sqlite3.Row
     db.execute("PRAGMA foreign_keys = ON")
     try:

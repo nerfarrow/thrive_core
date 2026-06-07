@@ -1,6 +1,6 @@
 # =============================================================================
 # routers/auth.py — Platform auth (users, sessions, roles)
-# thrive_core
+# thrive
 # =============================================================================
 from fastapi import APIRouter, HTTPException, Request, Response
 from pydantic import BaseModel
@@ -10,8 +10,8 @@ from datetime import datetime, timedelta
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
-DB_PATH       = os.environ.get("DB_FILE", "/data/thrivecore.db")
-COOKIE_NAME   = "thrivecore_session"
+DB_PATH       = os.environ.get("DB_FILE", "/data/thrive.db")
+COOKIE_NAME   = "thrive_session"
 COOKIE_SECURE = os.environ.get("COOKIE_SECURE", "true").lower() != "false"
 SESSION_DAYS  = int(os.environ.get("SESSION_DAYS", "30"))
 PBKDF2_ITERS  = 200_000

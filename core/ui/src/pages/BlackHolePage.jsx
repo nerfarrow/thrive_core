@@ -1,6 +1,6 @@
 // =============================================================================
 // BlackHolePage.jsx — full-screen interactive black hole + preset manager
-// thrive_core UI — reached via the 🕳️ nav icon (/blackhole)
+// thrive UI — reached via the 🕳️ nav icon (/blackhole)
 //
 // Full-quality interactive view of the shared blackhole-lensing renderer with a
 // preset dropdown (library built-ins + user presets from the DB), a few live
@@ -11,7 +11,7 @@ import { api } from '../api'
 import { useToast } from '../context/ToastContext'
 import { BlackHoleRenderer, PRESETS, DEFAULT_PARAMS, DEFAULT_TOGGLES, FEATURES } from 'blackhole-lensing/src/index.js'
 
-const BG_KEY = 'thrivecore:blackhole:bg'   // which preset drives the ambient background (per device)
+const BG_KEY = 'thrive:blackhole:bg'   // which preset drives the ambient background (per device)
 
 // library built-ins, surfaced in the dropdown alongside DB presets
 const BUILTINS = [
@@ -166,7 +166,7 @@ export default function BlackHolePage() {
   const setAsBackground = () => {
     try {
       localStorage.setItem(BG_KEY, JSON.stringify(snapshot()))
-      window.dispatchEvent(new CustomEvent('thrivecore:blackhole-bg-changed'))
+      window.dispatchEvent(new CustomEvent('thrive:blackhole-bg-changed'))
       showToast('Set as background', 'success')
     } catch { showToast('Could not save', 'error') }
   }

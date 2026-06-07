@@ -1,6 +1,6 @@
 # =============================================================================
 # routers/mpg.py — Vehicles module: vision-powered MPG / fuel log
-# thrive_core module `vehicles`
+# thrive module `vehicles`
 #
 # Fill-up tracking with optional vision extraction: snap the odometer and the
 # pump display, crop the numbers in the UI, and a local vision model (LM Studio
@@ -8,7 +8,7 @@
 # Overpass, and per-vehicle stats.
 #
 # Self-contained per the module loader:
-#   • reuses the platform DB helper (shared thrivecore.db)
+#   • reuses the platform DB helper (shared thrive.db)
 #   • owns `mpg_entries` and a small `mpg_config` key/value table — the module's
 #     own config store, since module routers can't import a core `routers.config`
 #   • config is served under this router (/mpg/config), not a generic /config

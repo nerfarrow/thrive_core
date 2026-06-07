@@ -1,6 +1,6 @@
 // =============================================================================
 // HomePage.jsx — Home module page (home base)
-// thrive_core UI — reached via the 🏠 icon in the top bar
+// thrive UI — reached via the 🏠 icon in the top bar
 //
 // Two parts:
 //   • Home base — the primary property: address, geocoded map (Leaflet,

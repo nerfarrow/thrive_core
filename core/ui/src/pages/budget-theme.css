@@ -1,7 +1,7 @@
 /* =============================================================================
-   budget-theme.css — alias the monolith budget CSS variables onto thrive_core's
+   budget-theme.css — alias the monolith budget CSS variables onto thrive's
    palette. The ported budget stylesheets (base.css, transactions.css, …) use the
-   monolith's var names (--bg, --accent, --text, …); thrive_core uses --bg-primary
+   monolith's var names (--bg, --accent, --text, …); thrive uses --bg-primary
    etc. Define the aliases once so the ported CSS renders with the right colors.
    ============================================================================= */
 :root {

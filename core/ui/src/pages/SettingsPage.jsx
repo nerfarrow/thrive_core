@@ -1,6 +1,6 @@
 // =============================================================================
 // SettingsPage.jsx — Platform settings (account, modules)
-// thrive_core UI — user management lives on its own page (UsersPage / 👥)
+// thrive UI — user management lives on its own page (UsersPage / 👥)
 // =============================================================================
 import { useState, useEffect, useRef } from 'react'
 import { useAuth } from '../context/AuthContext'
@@ -87,7 +87,7 @@ function GroupHead({ children }) {
   return <div style={{ padding: '8px 16px', fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--text-tertiary,#555)', background: 'var(--bg-tertiary,#222)' }}>{children}</div>
 }
 
-const UI_ALPHA_KEY = 'thrivecore:uiAlpha'
+const UI_ALPHA_KEY = 'thrive:uiAlpha'
 
 function UISection() {
   const [alpha, setAlpha] = useState(() => {
@@ -127,7 +127,7 @@ function ModulesSection() {
     try {
       await api.patch(`/modules/${m.id}`, { icon })
       setModules(prev => prev.map(x => x.id === m.id ? { ...x, icon } : x))
-      window.dispatchEvent(new CustomEvent('thrivecore:modules-changed'))
+      window.dispatchEvent(new CustomEvent('thrive:modules-changed'))
     } catch {}
   }
 
@@ -138,7 +138,7 @@ function ModulesSection() {
     setModules(prev => prev.map(x => x.id === m.id ? { ...x, color } : x))
     clearTimeout(colorTimers.current[m.id])
     colorTimers.current[m.id] = setTimeout(async () => {
-      try { await api.patch(`/modules/${m.id}`, { color }); window.dispatchEvent(new CustomEvent('thrivecore:modules-changed')) } catch {}
+      try { await api.patch(`/modules/${m.id}`, { color }); window.dispatchEvent(new CustomEvent('thrive:modules-changed')) } catch {}
     }, 300)
   }
 
@@ -153,7 +153,7 @@ function ModulesSection() {
       await api.patch(`/modules/${m.id}`, fields)
       setModules(prev => prev.map(x => x.id === m.id ? { ...x, ...fields } : x))
       // let the top bar + landing hub refresh their module lists live
-      window.dispatchEvent(new CustomEvent('thrivecore:modules-changed'))
+      window.dispatchEvent(new CustomEvent('thrive:modules-changed'))
     } catch {}
     finally { setSaving(null) }
   }

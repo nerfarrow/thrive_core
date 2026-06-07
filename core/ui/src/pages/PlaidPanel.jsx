@@ -1,6 +1,6 @@
 // =============================================================================
 // PlaidPanel.jsx — Budget module: Plaid connection manager
-// thrive_core UI — /budget/plaid
+// thrive UI — /budget/plaid
 //
 // Manual access-token flow (ported from the monolith Settings panel): paste a
 // Plaid access_token + label → Fetch lists that item's accounts → map each to a

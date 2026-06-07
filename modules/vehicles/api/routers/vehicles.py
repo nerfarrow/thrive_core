@@ -1,13 +1,13 @@
 # =============================================================================
 # routers/vehicles.py — Vehicles module: profiles, oil changes, tire tracking
-# thrive_core module `vehicles`
+# thrive module `vehicles`
 #
 # Garage of household vehicles plus their maintenance: oil changes and tires.
 # Fill-ups/MPG live in the sibling `mpg` router (mpg_entries table), which this
 # router reads for current odometer + summaries.
 #
 # Self-contained per the module loader: reuses the platform DB helper so it
-# shares the one thrivecore.db, and creates its tables in an idempotent
+# shares the one thrive.db, and creates its tables in an idempotent
 # init_db() at import time. The auth gate (main.py) already requires a signed-in
 # account for every non-public path, so these routes don't re-check per call.
 # =============================================================================

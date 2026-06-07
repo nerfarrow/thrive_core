@@ -1,6 +1,6 @@
 // =============================================================================
 // LandingPage.jsx — Module hub
-// thrive_core UI
+// thrive UI
 // =============================================================================
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
@@ -16,8 +16,8 @@ export default function LandingPage() {
   useEffect(() => {
     const fetchModules = () => api.get('/modules').then(setModules).catch(() => {})
     fetchModules()
-    window.addEventListener('thrivecore:modules-changed', fetchModules)
-    return () => window.removeEventListener('thrivecore:modules-changed', fetchModules)
+    window.addEventListener('thrive:modules-changed', fetchModules)
+    return () => window.removeEventListener('thrive:modules-changed', fetchModules)
   }, [])
 
   // only active (installed + enabled) modules become feature tiles

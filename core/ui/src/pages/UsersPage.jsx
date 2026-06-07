@@ -1,6 +1,6 @@
 // =============================================================================
 // UsersPage.jsx — Users module page (household profiles)
-// thrive_core UI — reached via the 👥 icon in the top bar
+// thrive UI — reached via the 👥 icon in the top bar
 //
 // A "user" is a person/profile (name + avatar), not a login. Login accounts
 // live in Settings → Accounts; an account may link to one profile here.

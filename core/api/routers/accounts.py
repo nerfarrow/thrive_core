@@ -1,6 +1,6 @@
 # =============================================================================
 # routers/accounts.py — Account management (login credentials)
-# thrive_core (core)
+# thrive (core)
 #
 # Accounts are login credentials (username/password/role). They are distinct
 # from `users`, which are household profiles owned by the users module. Each

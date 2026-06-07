@@ -1,5 +1,5 @@
 # =============================================================================
-# main.py — thrive_core API
+# main.py — thrive API
 # Platform shell: auth gate + module loader.
 # Modules register their own routers via modules.py bootstrap.
 # =============================================================================
@@ -10,7 +10,7 @@ from routers.auth import router as auth_router, current_user_from_request, PUBLI
 from routers.accounts import router as accounts_router
 import modules as mod_registry
 
-app = FastAPI(title="thrive_core", version="0.1.0")
+app = FastAPI(title="thrive", version="0.1.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -82,7 +82,7 @@ def update_module(module_id: str, request: Request, body: dict):
 # ── health ────────────────────────────────────────────────────────────────────
 @app.get("/health")
 def health():
-    return {"status": "ok", "platform": "thrive_core"}
+    return {"status": "ok", "platform": "thrive"}
 
 # ── bootstrap modules on startup ──────────────────────────────────────────────
 @app.on_event("startup")

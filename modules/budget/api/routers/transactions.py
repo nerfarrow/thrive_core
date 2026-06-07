@@ -1,6 +1,6 @@
 # =============================================================================
 # transactions.py — Budget module: transaction CRUD, import, verify, bulk, splits
-# thrive_core module `budget`
+# thrive module `budget`
 # =============================================================================
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -19,7 +19,7 @@ CLEARED_VALUES = {"Cleared", "Reconciled", "Unverified"}
 
 # ── db + money helpers ───────────────────────────────────────────────────────
 def get_db():
-    db = sqlite3.connect(os.environ.get("DB_FILE", "/data/thrivecore.db"), check_same_thread=False)
+    db = sqlite3.connect(os.environ.get("DB_FILE", "/data/thrive.db"), check_same_thread=False)
     db.row_factory = sqlite3.Row
     db.execute("PRAGMA foreign_keys = ON")
     try:

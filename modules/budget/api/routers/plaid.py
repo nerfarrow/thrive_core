@@ -22,7 +22,7 @@ PLAID_URL       = os.environ.get("PLAID_URL", "https://production.plaid.com")
 
 # ── db + money helpers ───────────────────────────────────────────────────────
 def get_db():
-    db = sqlite3.connect(os.environ.get("DB_FILE", "/data/thrivecore.db"), check_same_thread=False)
+    db = sqlite3.connect(os.environ.get("DB_FILE", "/data/thrive.db"), check_same_thread=False)
     db.row_factory = sqlite3.Row
     db.execute("PRAGMA foreign_keys = ON")
     try:
@@ -65,7 +65,7 @@ init_db()
 
 # ── config (DB-backed Plaid credentials; falls back to env) ──────────────────
 def _cfg(key: str, env_default: str = "") -> str:
-    conn = sqlite3.connect(os.environ.get("DB_FILE", "/data/thrivecore.db"))
+    conn = sqlite3.connect(os.environ.get("DB_FILE", "/data/thrive.db"))
     conn.row_factory = sqlite3.Row
     try:
         row = conn.execute("SELECT value FROM plaid_config WHERE key=?", (key,)).fetchone()
@@ -76,7 +76,7 @@ def _cfg(key: str, env_default: str = "") -> str:
     return env_default
 
 def _set_cfg(key: str, value: str):
-    conn = sqlite3.connect(os.environ.get("DB_FILE", "/data/thrivecore.db"))
+    conn = sqlite3.connect(os.environ.get("DB_FILE", "/data/thrive.db"))
     try:
         conn.execute(
             """INSERT INTO plaid_config (key, value, updated_at) VALUES (?, ?, datetime('now'))
