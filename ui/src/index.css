@@ -1,7 +1,11 @@
 :root {
+  /* surfaces use a shared alpha so the UI can be made translucent (Settings →
+     UI → opacity) to reveal the ambient background. --bg-primary stays opaque:
+     it's the html base behind the background canvas. */
+  --ui-alpha:      1;
   --bg-primary:    #0f0f0f;
-  --bg-secondary:  #181818;
-  --bg-tertiary:   #222222;
+  --bg-secondary:  rgba(24, 24, 24, var(--ui-alpha));
+  --bg-tertiary:   rgba(34, 34, 34, var(--ui-alpha));
   --border-color:  #2a2a2a;
   --text-primary:  #e8e6e0;
   --text-secondary:#aaaaaa;
@@ -14,8 +18,12 @@
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
+/* base colour lives on <html> so a fixed behind-UI canvas (e.g. the Black Hole
+   ambient background) can show through a transparent <body>. */
+html { background: var(--bg-primary); }
+
 body {
-  background: var(--bg-primary);
+  background: transparent;
   color: var(--text-primary);
   font-family: var(--font-body);
   font-size: 14px;

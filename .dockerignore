@@ -1,0 +1,6 @@
+# keep the (repo-root) build context lean — applies to builds using context: .
+**/node_modules
+**/dist
+.git
+data
+modules/*/.git

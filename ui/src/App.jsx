@@ -17,6 +17,8 @@ import HomePage    from './pages/HomePage'
 import VehiclesPage from './pages/VehiclesPage'
 import BudgetPage  from './pages/BudgetPage'
 import VaultPage   from './pages/VaultPage'
+import BlackHolePage from './pages/BlackHolePage'
+import BlackHoleBackground from 'blackhole-lensing/react/BlackHoleBackground'
 
 // ── top nav ───────────────────────────────────────────────────────────────────
 // Custom nav icon order is persisted per-device (localStorage) — the icon
@@ -123,6 +125,43 @@ function TopNav() {
   )
 }
 
+// ── ambient black-hole background ─────────────────────────────────────────────
+// Shown behind all UI when the `blackhole` module is enabled — except on the
+// full /blackhole view, which runs its own (full-quality) canvas. Uses the look
+// the user marked "set as background" (per device), forced to cheap quality.
+const BG_KEY = 'thrivecore:blackhole:bg'
+function AmbientBackground() {
+  const { user } = useAuth()
+  const location = useLocation()
+  const [enabled, setEnabled] = useState(false)
+  const [cfg, setCfg] = useState(() => { try { return JSON.parse(localStorage.getItem(BG_KEY)) } catch { return null } })
+
+  useEffect(() => {
+    if (!user) { setEnabled(false); return }
+    const check = () => api.get('/modules')
+      .then(ms => { const b = ms.find(m => m.id === 'blackhole'); setEnabled(!!(b && b.installed && b.enabled)) })
+      .catch(() => {})
+    check()
+    const onBg = () => { try { setCfg(JSON.parse(localStorage.getItem(BG_KEY))) } catch {} }
+    window.addEventListener('thrivecore:modules-changed', check)
+    window.addEventListener('thrivecore:blackhole-bg-changed', onBg)
+    return () => {
+      window.removeEventListener('thrivecore:modules-changed', check)
+      window.removeEventListener('thrivecore:blackhole-bg-changed', onBg)
+    }
+  }, [user])
+
+  if (!enabled || location.pathname.startsWith('/blackhole')) return null
+  return (
+    <BlackHoleBackground
+      params={cfg?.params || {}}
+      toggles={cfg?.toggles || {}}
+      quality="low"            /* ambient/always-on -> keep it cheap */
+      opacity={0.6}
+    />
+  )
+}
+
 // ── root ────────────────────────────────────────────────────────────────────
 // Landing behaviour depends on the home module: if it's active, `/` is the home
 // base; otherwise `/` shows the module tiles (LandingPage).
@@ -147,17 +186,19 @@ function RootRoute() {
 function Shell() {
   return (
     <>
+      <AmbientBackground />
       <TopNav />
       <main style={{ marginTop: 48, minHeight: 'calc(100vh - 48px)' }}>
         <Routes>
-          <Route path="/"         element={<RootRoute />} />
-          <Route path="/home"     element={<HomePage />} />
-          <Route path="/vehicles" element={<VehiclesPage />} />
-          <Route path="/budget/*" element={<BudgetPage />} />
-          <Route path="/vault"    element={<VaultPage />} />
-          <Route path="/users"    element={<UsersPage />} />
-          <Route path="/settings" element={<SettingsPage />} />
-          <Route path="*"         element={<Navigate to="/" replace />} />
+          <Route path="/"          element={<RootRoute />} />
+          <Route path="/home"      element={<HomePage />} />
+          <Route path="/vehicles"  element={<VehiclesPage />} />
+          <Route path="/budget/*"  element={<BudgetPage />} />
+          <Route path="/vault"     element={<VaultPage />} />
+          <Route path="/blackhole" element={<BlackHolePage />} />
+          <Route path="/users"     element={<UsersPage />} />
+          <Route path="/settings"  element={<SettingsPage />} />
+          <Route path="*"          element={<Navigate to="/" replace />} />
         </Routes>
       </main>
     </>
@@ -177,6 +218,11 @@ function Gate() {
 }
 
 export default function App() {
+  // apply the saved UI opacity globally on load (Settings → UI)
+  useEffect(() => {
+    const v = parseFloat(localStorage.getItem('thrivecore:uiAlpha'))
+    if (!isNaN(v)) document.documentElement.style.setProperty('--ui-alpha', String(v))
+  }, [])
   return (
     <BrowserRouter>
       <AuthProvider>

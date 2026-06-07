@@ -24,7 +24,11 @@ services:
       - internal
 
   ui:
-    build: ./ui
+    # context is the repo root so the build can include the shared
+    # blackhole-lensing/ library (imported by the UI via a Vite alias).
+    build:
+      context: .
+      dockerfile: ui/Dockerfile
     container_name: thrivecore_ui
     restart: unless-stopped
     ports:

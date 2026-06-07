@@ -16,3 +16,4 @@ modules/*
 !modules/vehicles/
 !modules/budget/
 !modules/vault/
+!modules/blackhole/
