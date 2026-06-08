@@ -19,7 +19,9 @@ import BudgetPage  from './pages/BudgetPage'
 import VaultPage   from './pages/VaultPage'
 import BlackHolePage from './pages/BlackHolePage'
 import LMStudioPage from './pages/LMStudioPage'
+import GrovekeeperPage from './pages/GrovekeeperPage'
 import BlackHoleBackground from 'blackhole-lensing/react/BlackHoleBackground'
+import TreeBackground from 'grovekeeper/react/TreeBackground'
 
 // ── top nav ───────────────────────────────────────────────────────────────────
 // Custom nav icon order is persisted per-device (localStorage) — the icon
@@ -126,37 +128,63 @@ function TopNav() {
   )
 }
 
-// ── ambient black-hole background ─────────────────────────────────────────────
-// Shown behind all UI when the `blackhole` module is enabled — except on the
-// full /blackhole view, which runs its own (full-quality) canvas. Uses the look
-// the user marked "set as background" (per device), forced to cheap quality.
-const BG_KEY = 'thrive:blackhole:bg'
+// ── ambient background ────────────────────────────────────────────────────────
+// A single per-device choice (`thrive:ambient` = { module, cfg }) drives which
+// module's renderer paints behind all UI — only one ever does. A module's page
+// "Set as background" button writes this key. The ambient renders only when its
+// module is installed+enabled and you're not already on that module's own
+// (full-quality) page. Forced to cheap quality.
+const AMBIENT_KEY = 'thrive:ambient'
+// background renderers keyed by module id; add an entry to make a module ambient-capable
+const AMBIENTS = {
+  blackhole:   { path: '/blackhole',   Comp: BlackHoleBackground },
+  grovekeeper: { path: '/grovekeeper', Comp: TreeBackground },
+}
+function readAmbient() {
+  try {
+    const a = JSON.parse(localStorage.getItem(AMBIENT_KEY))
+    if (a && a.module) return a
+  } catch {}
+  // back-compat: legacy blackhole-only key
+  try {
+    const legacy = JSON.parse(localStorage.getItem('thrive:blackhole:bg'))
+    if (legacy) return { module: 'blackhole', cfg: legacy }
+  } catch {}
+  return null
+}
 function AmbientBackground() {
   const { user } = useAuth()
   const location = useLocation()
-  const [enabled, setEnabled] = useState(false)
-  const [cfg, setCfg] = useState(() => { try { return JSON.parse(localStorage.getItem(BG_KEY)) } catch { return null } })
+  const [modules, setModules] = useState([])
+  const [ambient, setAmbient] = useState(readAmbient)
 
   useEffect(() => {
-    if (!user) { setEnabled(false); return }
-    const check = () => api.get('/modules')
-      .then(ms => { const b = ms.find(m => m.id === 'blackhole'); setEnabled(!!(b && b.installed && b.enabled)) })
-      .catch(() => {})
+    if (!user) { setModules([]); return }
+    const check = () => api.get('/modules').then(setModules).catch(() => {})
     check()
-    const onBg = () => { try { setCfg(JSON.parse(localStorage.getItem(BG_KEY))) } catch {} }
+    const onAmbient = () => setAmbient(readAmbient())
     window.addEventListener('thrive:modules-changed', check)
-    window.addEventListener('thrive:blackhole-bg-changed', onBg)
+    window.addEventListener('thrive:ambient-changed', onAmbient)
     return () => {
       window.removeEventListener('thrive:modules-changed', check)
-      window.removeEventListener('thrive:blackhole-bg-changed', onBg)
+      window.removeEventListener('thrive:ambient-changed', onAmbient)
     }
   }, [user])
 
-  if (!enabled || location.pathname.startsWith('/blackhole')) return null
+  if (!ambient) return null
+  const slot = AMBIENTS[ambient.module]
+  const mod  = modules.find(m => m.id === ambient.module)
+  if (!slot || !mod || !mod.installed || !mod.enabled) return null
+  // never paint the ambient behind a full-screen renderer page (its own OR another's —
+  // those pages fill the viewport with their own canvas)
+  if (Object.values(AMBIENTS).some(s => location.pathname.startsWith(s.path))) return null
+
+  const { Comp } = slot
+  const cfg = ambient.cfg || {}
   return (
-    <BlackHoleBackground
-      params={cfg?.params || {}}
-      toggles={cfg?.toggles || {}}
+    <Comp
+      params={cfg.params || {}}
+      toggles={cfg.toggles || {}}
       quality="low"            /* ambient/always-on -> keep it cheap */
       opacity={0.6}
     />
@@ -205,6 +233,7 @@ function Shell() {
           <Route path="/budget/*"  element={<BudgetPage />} />
           <Route path="/vault"     element={<VaultPage />} />
           <Route path="/blackhole" element={<BlackHolePage />} />
+          <Route path="/grovekeeper" element={<GrovekeeperPage />} />
           <Route path="/lmstudio"  element={<LMStudioPage />} />
           <Route path="/users"     element={<UsersPage />} />
           <Route path="/settings"  element={<SettingsPage />} />

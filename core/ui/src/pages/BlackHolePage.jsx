@@ -11,7 +11,8 @@ import { api } from '../api'
 import { useToast } from '../context/ToastContext'
 import { BlackHoleRenderer, PRESETS, DEFAULT_PARAMS, DEFAULT_TOGGLES, FEATURES } from 'blackhole-lensing/src/index.js'
 
-const BG_KEY = 'thrive:blackhole:bg'   // which preset drives the ambient background (per device)
+// "Set as background" writes the unified ambient picker (per device); only one
+// module's renderer ever paints behind the UI — see AmbientBackground in App.jsx.
 
 // library built-ins, surfaced in the dropdown alongside DB presets
 const BUILTINS = [
@@ -31,32 +32,64 @@ const lbl   = { fontSize: 10, color: 'var(--text-tertiary,#666)', textTransform:
 // full in-app tuner — mirrors the standalone demo's controls
 const GROUPS = [
   { t: 'Camera', rows: [
-    { k: 'camDist',     label: 'Distance',  min: 8,    max: 200, step: 0.5 },
-    { k: 'inclination', label: 'Tilt',      min: 0,    max: 1.4, step: 0.005 },
-    { k: 'fov',         label: 'Zoom',      min: 0.4,  max: 2.5, step: 0.01 },
-    { k: 'offsetX',     label: 'Offset X',  min: -0.5, max: 0.5, step: 0.01 },
-    { k: 'offsetY',     label: 'Offset Y',  min: -0.5, max: 0.5, step: 0.01 },
+    { k: 'camDist',     label: 'Distance',  min: 8,    max: 200, step: 0.5,
+      tip: 'How far the camera sits from the black hole. The mouse wheel zooms this too.' },
+    { k: 'inclination', label: 'Tilt',      min: 0,    max: 1.4, step: 0.005,
+      tip: 'Camera tilt relative to the disk. 0 = edge-on (the disk looks like a line); higher looks down onto it.' },
+    { k: 'fov',         label: 'Zoom',      min: 0.4,  max: 2.5, step: 0.01,
+      tip: 'Field of view. Lower = zoomed-in / telephoto; higher = wide angle.' },
+    { k: 'offsetX',     label: 'Offset X',  min: -0.5, max: 0.5, step: 0.01,
+      tip: 'Shifts the hole left/right in the frame (useful for tucking it into a corner).' },
+    { k: 'offsetY',     label: 'Offset Y',  min: -0.5, max: 0.5, step: 0.01,
+      tip: 'Shifts the hole up/down in the frame.' },
   ] },
   { t: 'Black hole / disk', rows: [
-    { k: 'horizon',     label: 'Shadow radius', min: 0.4, max: 2.5, step: 0.05 },
-    { k: 'diskInner',   label: 'Disk inner',    min: 1.5, max: 8,   step: 0.1 },
-    { k: 'diskOuter',   label: 'Disk outer',    min: 5,   max: 20,  step: 0.1 },
+    { k: 'horizon',     label: 'Shadow radius', min: 0.4, max: 2.5, step: 0.05,
+      tip: 'Size of the black shadow — the silhouette of the event horizon.' },
+    { k: 'diskInner',   label: 'Disk inner',    min: 1.5, max: 8,   step: 0.1,
+      tip: 'Inner edge of the glowing accretion disk — how close the gas starts to the hole.' },
+    { k: 'diskOuter',   label: 'Disk outer',    min: 5,   max: 20,  step: 0.1,
+      tip: 'Outer edge of the disk — how far the ring of gas extends.' },
   ] },
   { t: 'Look', rows: [
-    { k: 'palette',       label: 'Palette',  min: 0, max: 1,   step: 0.01 },
-    { k: 'intensity',     label: 'Intensity',min: 0, max: 3,   step: 0.01 },
-    { k: 'beaming',       label: 'Beaming',  min: 0, max: 1.5, step: 0.01 },
-    { k: 'rotationSpeed', label: 'Rotation', min: 0, max: 4,   step: 0.01 },
+    { k: 'palette',       label: 'Palette',  min: 0, max: 1,   step: 0.01,
+      tip: 'Color scheme, blended 0→1 (NASA red/orange ↔ Interstellar white-gold).' },
+    { k: 'intensity',     label: 'Intensity',min: 0, max: 3,   step: 0.01,
+      tip: 'Overall brightness of the disk and glow.' },
+    { k: 'beaming',       label: 'Beaming',  min: 0, max: 1.5, step: 0.01,
+      tip: 'Relativistic Doppler beaming — how much brighter the side of the disk spinning toward you gets.' },
+    { k: 'rotationSpeed', label: 'Rotation', min: 0, max: 4,   step: 0.01,
+      tip: 'How fast the disk visibly spins.' },
   ] },
   { t: 'Atmosphere', rows: [
-    { k: 'stars',  label: 'Stars',  min: 0, max: 2, step: 0.01 },
-    { k: 'nebula', label: 'Nebula', min: 0, max: 2, step: 0.01 },
-    { k: 'glow',   label: 'Bloom',  min: 0, max: 2, step: 0.01 },
+    { k: 'stars',  label: 'Stars',  min: 0, max: 2, step: 0.01,
+      tip: 'Brightness / amount of the background starfield.' },
+    { k: 'nebula', label: 'Nebula', min: 0, max: 2, step: 0.01,
+      tip: 'Amount of colored nebula haze behind the hole.' },
+    { k: 'glow',   label: 'Bloom',  min: 0, max: 2, step: 0.01,
+      tip: 'Soft bloom/glow spread around the bright parts of the disk.' },
   ] },
 ]
+const FEATURE_TIPS = {
+  disk:    'The glowing accretion disk of gas orbiting the hole.',
+  beaming: 'Doppler brightness asymmetry on the disk (needs the disk on).',
+  stars:   'Background starfield.',
+  nebula:  'Colored nebula haze behind the scene.',
+  glow:    'Bloom / glow post-effect around bright areas.',
+}
+const QUALITY_TIP = 'Render detail vs. performance: lower uses fewer ray steps + fewer pixels + a capped frame rate (smoother on weak hardware).'
 const QUALITIES = ['ultra', 'high', 'medium', 'low', 'potato']
 
 const SIDEBAR_W = 260
+
+// tiny hover-help badge (native tooltip → never clipped by the scrolling panel)
+function Tip({ text }) {
+  return (
+    <span title={text} style={{ cursor: 'help', color: 'var(--text-tertiary,#666)', fontSize: 8, marginLeft: 5,
+      border: '1px solid var(--border-color,#333)', borderRadius: '50%', width: 12, height: 12,
+      display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontWeight: 700 }}>?</span>
+  )
+}
 
 export default function BlackHolePage() {
   const { showToast } = useToast()
@@ -162,11 +195,11 @@ export default function BlackHolePage() {
     } catch (e) { showToast(e.message, 'error') }
   }
 
-  // mark the selected look as the ambient background (per device)
+  // mark the selected look as the unified ambient background (per device)
   const setAsBackground = () => {
     try {
-      localStorage.setItem(BG_KEY, JSON.stringify(snapshot()))
-      window.dispatchEvent(new CustomEvent('thrive:blackhole-bg-changed'))
+      localStorage.setItem('thrive:ambient', JSON.stringify({ module: 'blackhole', cfg: snapshot() }))
+      window.dispatchEvent(new CustomEvent('thrive:ambient-changed'))
       showToast('Set as background', 'success')
     } catch { showToast('Could not save', 'error') }
   }
@@ -231,7 +264,7 @@ export default function BlackHolePage() {
           <>
             {/* quality */}
             <div style={{ marginBottom: 12 }}>
-              <div style={lbl}>Quality</div>
+              <div style={{ ...lbl, display: 'flex', alignItems: 'center' }}>Quality<Tip text={QUALITY_TIP} /></div>
               <select style={inp} value={qual} onChange={e => setQuality(e.target.value)}>
                 {QUALITIES.map(q => <option key={q} value={q}>{q}</option>)}
               </select>
@@ -240,7 +273,7 @@ export default function BlackHolePage() {
             {/* feature toggles */}
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 12px', marginBottom: 12, paddingBottom: 10, borderBottom: '1px solid var(--border-color,#2a2a2a)' }}>
               {FEATURES.map(f => (
-                <label key={f} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, textTransform: 'capitalize', cursor: 'pointer' }}>
+                <label key={f} title={FEATURE_TIPS[f]} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, textTransform: 'capitalize', cursor: 'pointer' }}>
                   <input type="checkbox" checked={bh.toggles[f]} onChange={e => toggleFeat(f, e.target.checked)} style={{ accentColor: '#8b5cf6' }} /> {f}
                 </label>
               ))}
@@ -253,7 +286,7 @@ export default function BlackHolePage() {
                 {g.rows.map(s => (
                   <div key={s.k} style={{ marginBottom: 8 }}>
                     <div style={{ ...lbl, display: 'flex', justifyContent: 'space-between', marginBottom: 2 }}>
-                      <span>{s.label}</span><b style={{ color: 'var(--text-secondary,#aaa)' }}>{(+getParam(s.k)).toFixed(2)}</b>
+                      <span style={{ display: 'inline-flex', alignItems: 'center' }}>{s.label}<Tip text={s.tip} /></span><b style={{ color: 'var(--text-secondary,#aaa)' }}>{(+getParam(s.k)).toFixed(2)}</b>
                     </div>
                     <input type="range" min={s.min} max={s.max} step={s.step} value={getParam(s.k)}
                       onChange={e => setParam(s.k, +e.target.value)} style={{ width: '100%', accentColor: '#8b5cf6' }} />

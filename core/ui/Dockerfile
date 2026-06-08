@@ -4,8 +4,9 @@ WORKDIR /app
 COPY ui/package.json .
 RUN npm install
 COPY ui .
-# shared renderer library, imported via the `blackhole-lensing` Vite alias
+# shared renderer libraries, imported via Vite aliases (`blackhole-lensing`, `grovekeeper`)
 COPY blackhole-lensing /blackhole-lensing
+COPY grovekeeper /grovekeeper
 RUN npm run build
 
 FROM nginx:alpine

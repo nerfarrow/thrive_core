@@ -18,3 +18,4 @@ modules/*
 !modules/vault/
 !modules/blackhole/
 !modules/lmstudio/
+!modules/grovekeeper/
