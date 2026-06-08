@@ -20,7 +20,7 @@ import {
 } from './treeShaders.js';
 
 export const DEFAULT_PARAMS = {
-  // which skeleton generator: 'recursive' | 'spacecol' | 'lsystem'
+  // which skeleton generator: 'recursive' | 'spacecol' | 'lsystem' | 'selforg'
   algorithm:     'recursive',
   // structure / growth
   growthSeconds: 18,
@@ -40,6 +40,11 @@ export const DEFAULT_PARAMS = {
   lsysIters:     4,
   lsysAngle:     0.42,
   lsysTaper:     0.78,
+  // self-organizing (Palubicki)
+  soIters:       16,
+  soLambda:      0.52,
+  soAngle:       0.85,
+  soTropism:     0.30,
   // foliage
   leafDensity:   7,
   leafSize:      0.065,
@@ -81,6 +86,7 @@ const STRUCTURAL = [
   'maxDepth', 'regularity', 'fractalAngle',                       // recursive
   'crownRadius', 'crownHeight', 'markerCount', 'dKill',           // spacecol
   'lsysIters', 'lsysAngle', 'lsysTaper',                          // lsystem
+  'soIters', 'soLambda', 'soAngle', 'soTropism',                  // self-organizing
 ];
 
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));

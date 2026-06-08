@@ -20,6 +20,7 @@ export const ALGORITHM_LIST = [
   { id: 'recursive', name: 'Recursive (fractal)' },
   { id: 'spacecol',  name: 'Space colonization' },
   { id: 'lsystem',   name: 'L-system' },
+  { id: 'selforg',   name: 'Self-organizing (Palubicki)' },
 ];
 
 function makeBounds() {
@@ -212,4 +213,121 @@ function lsystem(params, rand) {
   return { segments: segs, bounds: bounds.finish() };
 }
 
-export const ALGORITHMS = { recursive, spacecol, lsystem };
+// ── self-organizing (Palubicki et al. 2009) ──────────────────────────────────
+// The paper's hallmark: buds compete for LIGHT via a voxel "shadow" field, then a
+// fixed base vigor is shared out top-down by the Borchert–Honda rule (apical
+// control λ) so dominant, well-lit shoots get most of the growth and shaded ones
+// starve. Each cycle: cast shadow → score each bud's light Q → sum Q basipetally
+// → distribute vigor acropetally (BH) → buds grow metamers ∝ their vigor, biased
+// upward by tropism, spawning laterals. Pipe-model radii. Self-thinning, organic.
+function selforg(params, rand) {
+  const segs = [], bounds = makeBounds();
+  const cycles  = clamp(Math.round(params.soIters ?? 20), 4, 28);
+  const lambda  = clamp(params.soLambda ?? 0.52, 0.50, 0.62);   // apical control
+  const angle   = params.soAngle   ?? 0.85;                     // lateral divergence
+  const tropism = params.soTropism ?? 0.30;                     // upward (photo/grav) bias
+  const VOX = 0.12, A = 1.0, B = 2.0, QMAX = 4;                 // shadow pyramid
+  const ILEN = 0.13;                                            // internode length
+  const VMIN = 0.9;                                             // vigor needed to extend
+  const MAX_NODES = 2200, GOLDEN = 2.399963;
+
+  // node = internode endpoint; main = is it the apical continuation of its parent
+  const nodes = [{ pos: [0, 0, 0], dir: [0, 1, 0], parent: -1, kids: [], born: 0, q: 0, v: 0, r: 0, main: true }];
+  // bud = prospective growth point hanging off a node; main = apical (vs lateral)
+  let buds = [{ parent: 0, dir: [0, 1, 0], main: true, roll: 0, q: 0, v: 0 }];
+  const vkey = (x, y, z) => x + ',' + y + ',' + z;
+
+  for (let c = 1; c <= cycles && nodes.length < MAX_NODES && buds.length; c++) {
+    // 1) shadow field — every node deposits a downward pyramid of shade
+    const shade = new Map();
+    for (const n of nodes) {
+      const ix = Math.round(n.pos[0] / VOX), iy = Math.round(n.pos[1] / VOX), iz = Math.round(n.pos[2] / VOX);
+      for (let q = 0; q <= QMAX; q++) {
+        const s = A * Math.pow(B, -q);
+        for (let dx = -q; dx <= q; dx++)
+          for (let dz = -q; dz <= q; dz++) {
+            const k = vkey(ix + dx, iy - q, iz + dz);
+            shade.set(k, (shade.get(k) || 0) + s);
+          }
+      }
+    }
+    // light at a point: full minus accumulated shade (+A undoes a bud's own apex deposit)
+    const lightAt = (p) => Math.max(0, A - (shade.get(vkey(Math.round(p[0] / VOX), Math.round(p[1] / VOX), Math.round(p[2] / VOX))) || 0) + A);
+
+    // 2) each bud's available light
+    for (const b of buds) b.q = lightAt(add(nodes[b.parent].pos, scale(b.dir, ILEN)));
+
+    // 3) accumulate Q basipetally (parent index < child index → reverse sweep)
+    for (const n of nodes) n.q = 0;
+    for (const b of buds) nodes[b.parent].q += b.q;
+    for (let i = nodes.length - 1; i >= 1; i--) nodes[nodes[i].parent].q += nodes[i].q;
+
+    // 4) distribute vigor acropetally by Borchert–Honda. base vigor = captured light.
+    const budsByParent = new Map();
+    for (let bi = 0; bi < buds.length; bi++) {
+      const pid = buds[bi].parent; let arr = budsByParent.get(pid);
+      if (!arr) { arr = []; budsByParent.set(pid, arr); } arr.push(bi);
+    }
+    // base vigor is a per-cycle growth BUDGET that rises slowly with maturity — not
+    // the raw captured light, which grows unbounded as the canopy spreads (and would
+    // just slam the node cap, making 'cycles' meaningless). Capping it lets the tree
+    // add a controlled amount of growth each season, so soIters sets the final size.
+    nodes[0].v = Math.min(nodes[0].q, 6 + c * 1.5);
+    for (let i = 0; i < nodes.length; i++) {
+      const n = nodes[i], cw = [];   // children = child nodes + buds; main weighted by λ
+      for (const ci of n.kids) cw.push({ node: ci, w: (nodes[ci].main ? lambda : 1 - lambda) * nodes[ci].q });
+      for (const bi of (budsByParent.get(i) || [])) cw.push({ bud: bi, w: (buds[bi].main ? lambda : 1 - lambda) * buds[bi].q });
+      let denom = 0; for (const c2 of cw) denom += c2.w;
+      for (const c2 of cw) {
+        const vv = denom > 0 ? n.v * c2.w / denom : 0;
+        if (c2.node != null) nodes[c2.node].v = vv; else buds[c2.bud].v = vv;
+      }
+    }
+
+    // 5) grow buds that earned enough vigor; build the next bud generation
+    const next = [];
+    for (const b of buds) {
+      const m = Math.min(3, Math.floor(b.v / VMIN));
+      if (m < 1) { if (b.q > 0.15 && nodes.length < MAX_NODES) next.push({ ...b }); continue; }  // dormant, keep if still lit
+      let cur = b.parent, dir = b.dir, roll = b.roll;
+      for (let k = 0; k < m && nodes.length < MAX_NODES; k++) {
+        const nd = normalize(add(dir, [(rand() - 0.5) * 0.15, tropism, (rand() - 0.5) * 0.15]));
+        const p0 = nodes[cur].pos, p1 = add(p0, scale(nd, ILEN));
+        bounds.track(p0); bounds.track(p1);
+        const ni = nodes.length;
+        nodes.push({ pos: p1, dir: nd, parent: cur, kids: [], born: c, q: 0, v: 0, r: 0, main: k === 0 ? b.main : true });
+        nodes[cur].kids.push(ni);
+        // spawn a lateral bud at each new metamer, splayed off-axis via the golden angle
+        roll += GOLDEN;
+        const [u, v] = frame(nd);
+        const lat = normalize(add(scale(nd, Math.cos(angle)), add(scale(u, Math.sin(angle) * Math.cos(roll)), scale(v, Math.sin(angle) * Math.sin(roll)))));
+        next.push({ parent: ni, dir: lat, main: false, roll: rand() * 6.28, q: 0, v: 0 });
+        cur = ni; dir = nd;
+      }
+      next.push({ parent: cur, dir, main: true, roll, q: 0, v: 0 });   // apical bud continues straight
+    }
+    buds = next;
+  }
+
+  // pipe-model radii (reverse sweep: children already done), scaled so root = trunkRadius
+  const E = 2.3, pw = new Array(nodes.length).fill(0);
+  for (let i = nodes.length - 1; i >= 0; i--) {
+    const n = nodes[i];
+    n.r = n.kids.length ? Math.pow(pw[i], 1 / E) : MIN_R;
+    if (n.parent >= 0) pw[n.parent] += Math.pow(n.r, E);
+  }
+  const sr = (params.trunkRadius ?? 0.06) / (nodes[0].r || MIN_R);
+  for (const n of nodes) n.r = Math.max(n.r * sr, MIN_R);
+
+  const maxY = bounds.maxY || 1;
+  for (let i = 1; i < nodes.length; i++) {
+    const n = nodes[i], p = nodes[n.parent];
+    const t0 = clamp((n.born - 1) / cycles, 0, 1) * params.leafPhase;
+    const t1 = Math.max(t0 + 0.01, clamp(n.born / cycles, 0, 1) * params.leafPhase);
+    const tip = n.kids.length === 0;
+    segs.push({ p0: p.pos, p1: n.pos, rBase: p.r, rTip: n.r, len: ILEN, t0, t1, level: clamp(n.pos[1] / maxY, 0, 1), tip, leaf: tip });
+  }
+  return { segments: segs, bounds: bounds.finish() };
+}
+
+export const ALGORITHMS = { recursive, spacecol, lsystem, selforg };

@@ -87,6 +87,16 @@ const ALGO_GROUPS = {
     { k: 'lsysTaper',    label: 'Taper',       min: 0.5, max: 0.95, step: 0.01,
       tip: 'How much each level shrinks in length + thickness.' },
   ] },
+  selforg: { t: 'Self-organizing', rows: [
+    { k: 'soIters',   label: 'Growth cycles', min: 4,   max: 28,  step: 1, int: true,
+      tip: 'How many seasons of growth to simulate. Each cycle, buds compete for light and the best-lit ones extend. More = a bigger, more developed tree (heavier to build).' },
+    { k: 'soLambda',  label: 'Apical control', min: 0.5, max: 0.62, step: 0.005,
+      tip: 'Borchert–Honda dominance. Higher pours growth into the leading shoot for a tall, central-leader tree; lower spreads it evenly for a rounder, bushier crown.' },
+    { k: 'soAngle',   label: 'Branch angle',  min: 0.4, max: 1.4,  step: 0.02,
+      tip: 'How far new side branches splay off their parent. Wider = a more spreading, open habit.' },
+    { k: 'soTropism', label: 'Upward pull',   min: 0,   max: 0.7,  step: 0.02,
+      tip: 'Phototropism — how strongly shoots bend back toward vertical as they grow. Higher = more upright; 0 = lets branches wander.' },
+  ] },
 }
 const COLORS = [
   { k: 'bgTop',     label: 'Sky top',    tip: 'Top of the background sky gradient.' },
