@@ -1,0 +1,17 @@
+# mkosi / build artifacts
+*.raw
+*.qcow2
+*.img
+*.vmdk
+*.vdi
+*.initrd
+*.vmlinuz
+output/
+mkosi.output/
+mkosi.cache/
+mkosi.builddir/
+.mkosi-*
+*.efi
+
+# mkosi "latest" output symlink (-> thriveos.raw)
+/thriveos
