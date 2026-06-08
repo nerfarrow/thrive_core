@@ -3,7 +3,7 @@
 // thrive UI
 // =============================================================================
 import { useState, useEffect, useCallback } from "react";
-import MPGPage from "./MPGPage";
+import MPGPage, { MpgChart } from "./MPGPage";
 
 const API = "/api/vehicles";
 function today() { return new Date().toISOString().slice(0, 10); }
@@ -400,6 +400,11 @@ function FillupsPanel({ vehicleId }) {
         </div>
       ) : (
         <div style={{ padding: "0 16px" }}>
+          {valid.length >= 2 && (
+            <div style={{ padding: "12px 0 4px" }}>
+              <MpgChart entries={rows} />
+            </div>
+          )}
           <div style={{ display: "grid", gridTemplateColumns: "92px 1fr 48px 52px 60px", gap: 6, padding: "8px 0", borderBottom: "1px solid var(--border-color,#2a2a2a)", fontSize: 10, textTransform: "uppercase", letterSpacing: "0.1em", color: "var(--text-tertiary,#666)" }}>
             <span>Date</span><span>Station</span><span style={{ textAlign: "right" }}>MPG</span><span style={{ textAlign: "right" }}>Gal</span><span style={{ textAlign: "right" }}>Total</span>
           </div>

@@ -153,7 +153,7 @@ function CropModal({ title, instruction, accent = "#e8e6e0", confirmLabel, src, 
 }
 
 // ── chart ──────────────────────────────────────────────────────────────────
-function MpgChart({ entries }) {
+export function MpgChart({ entries }) {
   const canvasRef = useRef(null);
   const draw = useCallback(() => {
     const canvas = canvasRef.current;
@@ -900,6 +900,18 @@ export default function MPGPage({ showToast, showConfirm }) {
                           <div style={{ padding: "4px 0 14px" }}>
                             {isEditing ? (
                               <div style={{ padding: "8px 4px" }}>
+                                {vehicles.length > 0 && (
+                                  <div style={{ display: "flex", flexDirection: "column", gap: 4, marginBottom: 8 }}>
+                                    <label style={labelStyle}>Vehicle</label>
+                                    <select
+                                      value={editing.vehicle_id ?? ""}
+                                      onChange={ev => editField("vehicle_id", ev.target.value ? parseInt(ev.target.value) : null)}
+                                      style={{ ...inputStyle, fontSize: 12 }}>
+                                      <option value="">— unlinked —</option>
+                                      {vehicles.map(v => <option key={v.id} value={v.id}>{vehName(v)}</option>)}
+                                    </select>
+                                  </div>
+                                )}
                                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 12px" }}>
                                   {[
                                     { id: "date", label: "Date", type: "date" },
