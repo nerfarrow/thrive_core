@@ -79,6 +79,23 @@ def update_module(module_id: str, request: Request, body: dict):
         raise HTTPException(status_code=404, detail="Module not found")
     return {"ok": True, "note": "Restart API to apply changes"}
 
+# ── platform settings ─────────────────────────────────────────────────────────
+@app.get("/settings")
+def get_settings():
+    """Server-wide platform settings (any signed-in user). `front_page` is the
+    module id (or 'landing') loaded at '/'; null = auto (single module, else home)."""
+    return {"front_page": mod_registry.get_setting("front_page")}
+
+@app.patch("/settings")
+def update_settings(request: Request, body: dict):
+    """Update platform settings (admin only)."""
+    user = current_user_from_request(request)
+    if not user or user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin only")
+    if "front_page" in body:
+        mod_registry.set_setting("front_page", body.get("front_page"))
+    return {"ok": True, "front_page": mod_registry.get_setting("front_page")}
+
 # ── health ────────────────────────────────────────────────────────────────────
 @app.get("/health")
 def health():

@@ -164,16 +164,24 @@ function AmbientBackground() {
 }
 
 // ── root ────────────────────────────────────────────────────────────────────
-// Landing behaviour depends on the home module: if it's active, `/` is the home
-// base; otherwise `/` shows the module tiles (LandingPage).
+// What loads at '/' is the server-wide "front page" setting (Settings → Front
+// page): a module's nav_path, or the module tiles (LandingPage). When unset it
+// auto-resolves — the only active module if there's just one, else Home, else tiles.
 function RootRoute() {
   const [dest, setDest] = useState(undefined)   // undefined=loading | string nav_path | null=tiles
   useEffect(() => {
     let cancelled = false
-    api.get('/modules')
-      .then(ms => {
-        const home = ms.find(m => m.id === 'home' && m.installed && m.enabled)
-        if (!cancelled) setDest(home ? (home.nav_path || '/home') : null)
+    Promise.all([api.get('/modules'), api.get('/settings').catch(() => ({}))])
+      .then(([ms, settings]) => {
+        if (cancelled) return
+        const navMods = ms.filter(m => m.installed && m.enabled && m.nav_path)
+        const fp = settings?.front_page
+        let d
+        if (fp === 'landing') d = null                                   // explicit: module tiles
+        else if (fp && navMods.find(m => m.id === fp)) d = navMods.find(m => m.id === fp).nav_path
+        else if (navMods.length === 1) d = navMods[0].nav_path           // default: the only module
+        else { const home = navMods.find(m => m.id === 'home'); d = home ? home.nav_path : null }
+        setDest(d)
       })
       .catch(() => { if (!cancelled) setDest(null) })
     return () => { cancelled = true }

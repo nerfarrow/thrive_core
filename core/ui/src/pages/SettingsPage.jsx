@@ -88,6 +88,47 @@ function GroupHead({ children }) {
   return <div style={{ padding: '8px 16px', fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--text-tertiary,#555)', background: 'var(--bg-tertiary,#222)' }}>{children}</div>
 }
 
+// Front page: the server-wide choice of what loads at '/' (a module's page, or
+// the module tiles). Unset = auto: the only active module if there's just one,
+// else Home, else tiles. Admin-controlled.
+function FrontPageSection() {
+  const [modules, setModules] = useState([])
+  const [front,   setFront]   = useState('')
+  const [saving,  setSaving]  = useState(false)
+  const [saved,   setSaved]   = useState(false)
+
+  useEffect(() => {
+    Promise.all([api.get('/modules'), api.get('/settings').catch(() => ({}))])
+      .then(([ms, s]) => { setModules(Array.isArray(ms) ? ms : []); setFront(s?.front_page || '') })
+      .catch(() => {})
+  }, [])
+
+  const navMods = modules.filter(m => m.installed && m.enabled && m.nav_path)
+  const defaultLabel = navMods.length === 1 ? navMods[0].name
+    : (navMods.find(m => m.id === 'home') ? 'Home' : 'Module tiles')
+
+  const save = async (val) => {
+    setFront(val); setSaving(true); setSaved(false)
+    try { await api.patch('/settings', { front_page: val }); setSaved(true); setTimeout(() => setSaved(false), 1500) }
+    catch {} finally { setSaving(false) }
+  }
+
+  return (
+    <div style={body}>
+      <label style={{ ...lbl, display: 'block' }}>Loads at start</label>
+      <select value={front} onChange={e => save(e.target.value)} style={{ ...inp, fontSize: 12 }}>
+        <option value="">Default · {defaultLabel}</option>
+        {navMods.map(m => <option key={m.id} value={m.id}>{m.icon || '📦'} {m.name}</option>)}
+        <option value="landing">▦ Module tiles (landing page)</option>
+      </select>
+      <div style={{ fontSize: 10, color: 'var(--text-tertiary,#666)', marginTop: 6 }}>
+        What thrive opens first at <code style={{ fontFamily: 'monospace' }}>/</code>.
+        {saving && ' Saving…'}{saved && ' Saved ✓'}
+      </div>
+    </div>
+  )
+}
+
 const UI_ALPHA_KEY = 'thrive:uiAlpha'
 
 function UISection() {
@@ -340,6 +381,13 @@ export default function SettingsPage() {
       <div style={{ marginBottom: '1.5rem' }}>
         <h1 style={{ fontSize: 14, fontWeight: 500, letterSpacing: '0.15em', textTransform: 'uppercase' }}>Settings</h1>
       </div>
+
+      {/* Front page — server-wide '/' destination; admin-controlled, sits at the top */}
+      {user?.role === 'admin' && (
+        <CollapsibleCard title="Front page">
+          <FrontPageSection />
+        </CollapsibleCard>
+      )}
 
       {/* Account: admins manage everything (incl. their own Sign out) in the
           Accounts card below; members get a simple identity + Sign out card. */}

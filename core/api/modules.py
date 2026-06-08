@@ -54,6 +54,42 @@ def init_modules_table():
         conn.close()
 
 
+# ── app config (core key/value settings, e.g. front_page) ────────────────────
+def init_app_config():
+    conn = get_db()
+    try:
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS app_config (
+                key        TEXT PRIMARY KEY,
+                value      TEXT,
+                updated_at TEXT DEFAULT (datetime('now'))
+            )
+        """)
+        conn.commit()
+    finally:
+        conn.close()
+
+def get_setting(key: str, default=None):
+    conn = get_db()
+    try:
+        row = conn.execute("SELECT value FROM app_config WHERE key=?", (key,)).fetchone()
+    finally:
+        conn.close()
+    return row["value"] if row and row["value"] is not None else default
+
+def set_setting(key: str, value: str | None):
+    conn = get_db()
+    try:
+        conn.execute(
+            """INSERT INTO app_config (key, value, updated_at) VALUES (?, ?, datetime('now'))
+               ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=datetime('now')""",
+            (key, (value or "").strip() or None)
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
 # ── discovery ────────────────────────────────────────────────────────────────
 def discover_modules() -> list[dict]:
     """Scan MODULES_DIR for valid module.json files."""
@@ -228,6 +264,7 @@ def set_module_installed(module_id: str, installed: bool) -> bool:
 def bootstrap(app: FastAPI):
     """Call this from main.py on startup."""
     init_modules_table()
+    init_app_config()
     discovered = discover_modules()
     sync_registry(discovered)
     active     = get_active_ids()
