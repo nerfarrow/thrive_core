@@ -25,5 +25,5 @@ enable_unit() {
 
 enable_unit docker.service     # container engine
 enable_unit ssh.service        # remote admin
-enable_unit thrive.service     # the appliance: pulls + runs thrive_base
+enable_unit thrive.service     # the appliance: pulls the thrive repo + runs core/
 # NetworkManager is enabled by its own package install.

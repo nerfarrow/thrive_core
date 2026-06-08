@@ -1,21 +1,22 @@
 # thriveOS
 
 A self-hosted **appliance OS** whose entire purpose is to run
-[thrive_base](https://github.com/nerfarrow/thrive_base). Boot a machine on it and
-it comes up as a thrive server on your LAN — Docker, thrive_base, and its modules,
-with nothing else in the way.
+[thrive](https://github.com/nerfarrow/thrive) — specifically the platform shell in
+its [`core/`](../core/) directory. Boot a machine on it and it comes up as a thrive
+server on your LAN — Docker, thrive's `core/` stack, and its modules, with nothing
+else in the way.
 
 > **v0 scope:** a reproducible **amd64 appliance image** (minimal Debian + Docker +
-> thrive_base, brought up on first boot). It is *not* a from-scratch distro — it's a
-> stock Debian base assembled declaratively with [mkosi](https://github.com/systemd/mkosi).
+> thrive's `core/` stack, brought up on first boot). It is *not* a from-scratch distro
+> — it's a stock Debian base assembled declaratively with [mkosi](https://github.com/systemd/mkosi).
 > We earn the from-scratch distro later only if we ever actually need it.
 
 ## How it works
 1. `mkosi` assembles a minimal Debian `trixie` rootfs with Docker + tooling baked in.
 2. Our overlay ([`mkosi.extra/`](mkosi.extra/)) adds a systemd service + a first-boot
    bootstrap script.
-3. On first boot, `thrive-bootstrap` clones thrive_base into `/opt/thrive_base` and
-   `thrive.service` runs `docker compose up -d --build`.
+3. On first boot, `thrive-bootstrap` clones the thrive repo into `/opt/thrive` and
+   `thrive.service` runs `docker compose up -d --build` from `/opt/thrive/core`.
 4. The machine is now a thrive server on `http://<its-ip>:9500`.
 
 ```
@@ -23,7 +24,7 @@ with nothing else in the way.
         + Docker + compose
         + thrive.service / thrive-bootstrap
         =  thriveos.raw   →  flash to disk / boot as VM
-                              boot → thrive_base on :9500
+                              boot → thrive (core/) on :9500
 ```
 
 ## Build & test — no host tooling required
@@ -46,15 +47,15 @@ make clean     # remove build artifacts
 ## Design decisions (v0)
 - **Appliance, not distro** — stock Debian base, declaratively assembled. Maintainable.
 - **amd64**, testable in QEMU first (no flashing hardware to iterate).
-- **Headless server** by default — thrive_base is a household app you reach from your
+- **Headless server** by default — thrive is a household app you reach from your
   phone/laptop, not a kiosk terminal. (A kiosk-display mode is a future opt-in.)
-- **thrive_base pulled at first boot**, not baked in — so the appliance tracks the repo
+- **thrive pulled at first boot**, not baked in — so the appliance tracks the repo
   without rebuilding the OS image. (A future "release-pinned" mode can bake a version in.)
 
 ## Security notes (read before shipping past your LAN)
 - v0 sets a **default root password + console autologin** for testing — see
   [`mkosi.conf`](mkosi.conf). **Change these** before any real deployment.
-- thrive_base runs over **http** on :9500 (`COOKIE_SECURE=false`). Fine on a trusted
+- thrive runs over **http** on :9500 (`COOKIE_SECURE=false`). Fine on a trusted
   LAN; put it behind TLS (reverse proxy) for anything exposed.
 
 ## Status
@@ -62,9 +63,9 @@ make clean     # remove build artifacts
 - [x] `make image` produces a bootable `thriveos.raw` (1.7G, UEFI ESP)
 - [x] Boots in QEMU to Debian userspace — hostname `thriveos`, root autologin
 - [x] docker / ssh / thrive services enabled in the image (verified at build time)
-- [ ] thrive_base live on :9500 — needs a boot on a real network (guest must reach
-      GitHub + Docker Hub to clone thrive_base and pull its images). Not verifiable in
-      a network-restricted build sandbox; the machinery is in place and assembled.
+- [ ] thrive live on :9500 — needs a boot on a real network (guest must reach
+      GitHub + Docker Hub to clone the thrive repo and pull its images). Not verifiable
+      in a network-restricted build sandbox; the machinery is in place and assembled.
 - [ ] Flash/boot on real amd64 hardware
 - [ ] Optional kiosk-display mode
-- [ ] Release-pinned thrive_base mode (bake a thrive_base version in vs. pull-on-boot)
+- [ ] Release-pinned thrive mode (bake a thrive version in vs. pull-on-boot)

@@ -1,13 +1,14 @@
 #!/usr/bin/env bash
-# First-boot (and every-boot) bootstrap: ensure thrive_base is present + up to date,
-# and that a working `docker compose` exists. Idempotent.
+# First-boot (and every-boot) bootstrap: ensure the thrive repo is present + up to
+# date, and that a working `docker compose` exists. Idempotent.
 set -euo pipefail
 
-REPO="${THRIVE_REPO:-https://github.com/nerfarrow/thrive_base.git}"
+REPO="${THRIVE_REPO:-https://github.com/nerfarrow/thrive.git}"
 BRANCH="${THRIVE_BRANCH:-main}"
-DEST="${THRIVE_DIR:-/opt/thrive_base}"
+DEST="${THRIVE_DIR:-/opt/thrive}"
+CORE="${THRIVE_CORE:-$DEST/core}"   # platform shell: compose runs here, mounts ../modules
 
-# 1) ensure thrive_base source is present and current
+# 1) ensure the thrive repo is present and current
 if [ ! -d "$DEST/.git" ]; then
     echo "[thrive-bootstrap] cloning $REPO -> $DEST"
     git clone --branch "$BRANCH" "$REPO" "$DEST"
@@ -27,7 +28,8 @@ if ! docker compose version >/dev/null 2>&1; then
     chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
 fi
 
-# 3) data/ and modules/ live on the appliance and persist across thrive_base updates
-mkdir -p "$DEST/data" "$DEST/modules"
+# 3) runtime state lives on the appliance and persists across repo updates:
+#    core/data/ (thrive.db + vault) and the modules/ tree compose bind-mounts.
+mkdir -p "$CORE/data" "$DEST/modules"
 
 echo "[thrive-bootstrap] ready"
