@@ -2,14 +2,18 @@
 
 ## What this is
 `thrive` is a modular self-hosted household/lifestyle app. This repo is an
-**umbrella** with two parts:
+**umbrella** with three parts:
 - `core/` — the platform shell: auth, a module loader, settings, landing page.
   Everything else is a module. `core/` is self-contained and runnable on its own.
 - `modules/` — the pluggable features (budget, vehicles, vault, home, users,
   blackhole). Bind-mounted into the API container at runtime.
+- `os/` — **thriveOS**, the appliance-image build (merged in from its own repo,
+  history preserved). A reproducible amd64 Debian image, assembled declaratively
+  with `mkosi`, that boots straight into thrive. Self-contained; builds in a
+  privileged Docker container, host needs only Docker. See `os/README.md`.
 
-The broader vision is "thriveOS" — a custom Linux distro where thrive is the
-entire point of the machine. But thrive runs on any Linux box via Docker.
+thrive runs on any Linux box via Docker; thriveOS is the "appliance" path where
+thrive is the entire point of the machine.
 
 ## Related projects
 - **The old `thrive` monolith is RETIRED.** It ran at thrive.nerfarrow.com; on
@@ -17,7 +21,8 @@ entire point of the machine. But thrive runs on any Linux box via Docker.
   Borg), and `~/thrive` (its old dir) deleted. This repo (formerly `thrive_core`)
   is the clean rewrite and took over the `thrive` name.
 - `thriveSandbox` — read-only clone of the old monolith, kept as a porting reference.
-- `thriveOS` — future custom distro, not started yet.
+- `thriveOS` — **now lives in `os/`** (merged from its own repo, history preserved).
+  v0 builds a bootable amd64 appliance image; see `os/README.md` for status.
 
 ## Repo layout
 ```
@@ -45,13 +50,18 @@ thrive/                         (git: nerfarrow/thrive)
 │           ├── api.js           ← fetch wrapper + 401 handling
 │           ├── index.css  main.jsx
 │           ├── context/  components/  pages/
-└── modules/                    pluggable features (all tracked in this repo today)
-    ├── users/      ← household profiles (people, not logins)
-    ├── home/       ← properties/home base
-    ├── budget/     ← accounts, transactions, categories, payees, scheduled, plaid, reports
-    ├── vehicles/   ← garage, MPG, oil/tires
-    ├── vault/      ← Vaultwarden integration (served at /vault)
-    └── blackhole/  ← black-hole renderer page + DB-backed presets
+├── modules/                    pluggable features (all tracked in this repo today)
+│   ├── users/      ← household profiles (people, not logins)
+│   ├── home/       ← properties/home base
+│   ├── budget/     ← accounts, transactions, categories, payees, scheduled, plaid, reports
+│   ├── vehicles/   ← garage, MPG, oil/tires
+│   ├── vault/      ← Vaultwarden integration (served at /vault)
+│   └── blackhole/  ← black-hole renderer page + DB-backed presets
+└── os/                         thriveOS appliance image (mkosi; builds in Docker)
+    ├── Makefile    ← make image / vm / vmdk / vdi  (host needs only Docker)
+    ├── mkosi.conf  mkosi.extra/  mkosi.postinst   ← image definition + overlay
+    ├── build/      ← the privileged build-container (Debian + mkosi + qemu)
+    └── .gitignore  ← keeps build artifacts (*.raw/.vmdk/.initrd/…) out of git
 ```
 
 > **Note on module repos:** the design intent is that each module is its own repo
