@@ -17,9 +17,9 @@ services:
       - MODULES_DIR=/app/modules
       - COOKIE_SECURE=false   # http dev on :9500 — Secure cookies get dropped over http
       - SESSION_DAYS=30
-      # vehicles/mpg vision: local LLM hosts for the fuel-log OCR (override per box)
+      # lmstudio module: default local LM Studio host for vision OCR (override per
+      # box; also settable at runtime in Settings → LM Studio)
       - LMSTUDIO_BASE=http://192.168.0.50:1234
-      - OLLAMA_BASE=http://192.168.0.50:11434
       # budget/plaid: keys from dashboard.plaid.com (Developers → Keys). Put real
       # values in a .env next to this compose. URL: sandbox or production.plaid.com
       - PLAID_CLIENT_ID=${PLAID_CLIENT_ID:-}
@@ -57,9 +57,9 @@ services:
       # public URL via Cloudflare Tunnel. HTTPS is REQUIRED for the vault (Web
       # Crypto needs a secure context). nerfBase already runs cloudflared, so no
       # connector here — just add a public hostname on the existing tunnel:
-      #   test.nerfarrow.com → http://localhost:9500  (the host-published UI port)
+      #   thrive.nerfarrow.com → http://localhost:9500  (the host-published UI port)
       # Must match the public URL you serve the app at.
-      - DOMAIN=https://test.nerfarrow.com/vault
+      - DOMAIN=https://thrive.nerfarrow.com/vault
       - ROCKET_PORT=8222
       - WEB_VAULT_ENABLED=true
       - SIGNUPS_ALLOWED=true   # set false after you create your account
