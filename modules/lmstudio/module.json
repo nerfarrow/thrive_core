@@ -1,0 +1,12 @@
+{
+  "id": "lmstudio",
+  "name": "LM Studio",
+  "icon": "🤖",
+  "description": "Local LM Studio host — vision model discovery + image extraction for other modules",
+  "version": "0.1.0",
+  "color": "#a855f7",
+  "nav_path": "/lmstudio",
+  "core": false,
+  "api_routers": ["api.routers.lmstudio"],
+  "requires": []
+}

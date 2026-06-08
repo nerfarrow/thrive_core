@@ -6,6 +6,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { api } from '../api'
 import PlaidPanel from './PlaidPanel'
+import LMStudioPanel from './LMStudioPanel'
 import EmojiPicker from '../components/EmojiPicker'
 
 const card = { background: 'var(--bg-secondary,#181818)', border: '1px solid var(--border-color,#2a2a2a)', borderRadius: 10, marginBottom: 16, overflow: 'hidden' }
@@ -320,12 +321,17 @@ function AccountsSection() {
 
 export default function SettingsPage() {
   const { user, logout } = useAuth()
-  // Plaid is a Budget feature — its settings section appears here only when the
-  // Budget module is enabled.
-  const [budgetEnabled, setBudgetEnabled] = useState(false)
+  // Some settings panels belong to a module and only appear when it's active:
+  // Plaid ↔ Budget, AI host ↔ LM Studio.
+  const [budgetEnabled,   setBudgetEnabled]   = useState(false)
+  const [lmstudioEnabled, setLmstudioEnabled] = useState(false)
   useEffect(() => {
     api.get('/modules')
-      .then(ms => { const b = ms.find(m => m.id === 'budget'); setBudgetEnabled(!!(b && b.installed && b.enabled)) })
+      .then(ms => {
+        const on = id => { const m = ms.find(x => x.id === id); return !!(m && m.installed && m.enabled) }
+        setBudgetEnabled(on('budget'))
+        setLmstudioEnabled(on('lmstudio'))
+      })
       .catch(() => {})
   }, [])
 
@@ -359,6 +365,13 @@ export default function SettingsPage() {
       <CollapsibleCard title="Modules">
         <ModulesSection />
       </CollapsibleCard>
+
+      {/* LM Studio — AI host settings, shown when the LM Studio module is enabled */}
+      {lmstudioEnabled && (
+        <CollapsibleCard title="LM Studio" defaultOpen={false}>
+          <LMStudioPanel />
+        </CollapsibleCard>
+      )}
 
       {/* Plaid — shown when the Budget module is enabled */}
       {budgetEnabled && (

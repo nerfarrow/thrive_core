@@ -18,6 +18,7 @@ import VehiclesPage from './pages/VehiclesPage'
 import BudgetPage  from './pages/BudgetPage'
 import VaultPage   from './pages/VaultPage'
 import BlackHolePage from './pages/BlackHolePage'
+import LMStudioPage from './pages/LMStudioPage'
 import BlackHoleBackground from 'blackhole-lensing/react/BlackHoleBackground'
 
 // ── top nav ───────────────────────────────────────────────────────────────────
@@ -196,6 +197,7 @@ function Shell() {
           <Route path="/budget/*"  element={<BudgetPage />} />
           <Route path="/vault"     element={<VaultPage />} />
           <Route path="/blackhole" element={<BlackHolePage />} />
+          <Route path="/lmstudio"  element={<LMStudioPage />} />
           <Route path="/users"     element={<UsersPage />} />
           <Route path="/settings"  element={<SettingsPage />} />
           <Route path="*"          element={<Navigate to="/" replace />} />

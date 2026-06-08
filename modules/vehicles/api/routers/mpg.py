@@ -1,38 +1,26 @@
 # =============================================================================
-# routers/mpg.py — Vehicles module: vision-powered MPG / fuel log
+# routers/mpg.py — Vehicles module: MPG / fuel log
 # thrive module `vehicles`
 #
-# Fill-up tracking with optional vision extraction: snap the odometer and the
-# pump display, crop the numbers in the UI, and a local vision model (LM Studio
-# / Ollama) reads the digits. Also: nearby-station lookup via OpenStreetMap
-# Overpass, and per-vehicle stats.
+# Fill-up tracking with per-vehicle stats and nearby-station lookup via
+# OpenStreetMap Overpass. Vision-powered digit extraction (snap the odometer /
+# pump, crop the numbers, let a local vision model read them) now lives in the
+# standalone `lmstudio` module — the frontend calls /api/lmstudio/vision and
+# posts the kept crops back here as `images`.
 #
 # Self-contained per the module loader:
 #   • reuses the platform DB helper (shared thrive.db)
-#   • owns `mpg_entries` and a small `mpg_config` key/value table — the module's
-#     own config store, since module routers can't import a core `routers.config`
-#   • config is served under this router (/mpg/config), not a generic /config
+#   • owns `mpg_entries` and `mpg_entry_images`
 # =============================================================================
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 from typing import Optional
-import os, re, json, base64, io, math
+import os, math
 import httpx
-from PIL import Image, ImageEnhance, ImageOps
 
 from routers.auth import get_db
 
 router = APIRouter(prefix="/mpg", tags=["mpg"])
-
-HOSTS = {
-    "lmstudio": {"label": "LM Studio", "base": os.environ.get("LMSTUDIO_BASE", "http://192.168.0.50:1234")},
-    "ollama":   {"label": "Ollama",    "base": os.environ.get("OLLAMA_BASE",   "http://192.168.0.50:11434")},
-}
-
-CONFIG_DEFAULTS = {
-    "active_host":  "lmstudio",
-    "vision_model": "",
-}
 
 
 # ── db init ────────────────────────────────────────────────────────────────
@@ -53,24 +41,7 @@ def init_db():
                 created_at TEXT DEFAULT (datetime('now'))
             )
         """)
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS mpg_config (
-                key        TEXT PRIMARY KEY,
-                value      TEXT,
-                updated_at TEXT DEFAULT (datetime('now'))
-            )
-        """)
-        # per-model extraction scoreboard: how often each vision model produced
-        # a usable read vs. failed (error / non-JSON / unreadable)
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS mpg_model_stats (
-                model     TEXT PRIMARY KEY,
-                success   INTEGER NOT NULL DEFAULT 0,
-                fail      INTEGER NOT NULL DEFAULT 0,
-                last_used TEXT
-            )
-        """)
-        # saved enhanced crops (what the vision model actually read) per fill-up.
+        # saved enhanced crops (what the vision model read) per fill-up.
         # A side table keeps the base64 out of the common list/stats queries.
         conn.execute("""
             CREATE TABLE IF NOT EXISTS mpg_entry_images (
@@ -98,48 +69,6 @@ def init_db():
 init_db()
 
 
-# ── config helpers (module-owned key/value store) ────────────────────────────
-def get_cfg(key: str, default=None):
-    conn = get_db()
-    try:
-        row = conn.execute("SELECT value FROM mpg_config WHERE key=?", (key,)).fetchone()
-    finally:
-        conn.close()
-    if row is not None:
-        return row["value"]
-    return default if default is not None else CONFIG_DEFAULTS.get(key)
-
-def set_cfg(key: str, value: str):
-    conn = get_db()
-    try:
-        conn.execute(
-            """INSERT INTO mpg_config (key, value, updated_at) VALUES (?, ?, datetime('now'))
-               ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=datetime('now')""",
-            (key, value)
-        )
-        conn.commit()
-    finally:
-        conn.close()
-
-
-def record_model_result(model: Optional[str], ok: bool):
-    """Tally an extraction outcome against the model that produced it."""
-    if not model:
-        return
-    col = "success" if ok else "fail"
-    conn = get_db()
-    try:
-        conn.execute(
-            f"""INSERT INTO mpg_model_stats (model, {col}, last_used)
-                VALUES (?, 1, datetime('now'))
-                ON CONFLICT(model) DO UPDATE SET {col}={col}+1, last_used=datetime('now')""",
-            (model,)
-        )
-        conn.commit()
-    finally:
-        conn.close()
-
-
 # ── schemas ────────────────────────────────────────────────────────────────
 class EntryCreate(BaseModel):
     date:       str
@@ -154,183 +83,6 @@ class EntryCreate(BaseModel):
     vehicle_id: Optional[int]   = None
     # enhanced crops the model read, kept on log: {'odometer'|'total'|'gallons': b64}
     images:     Optional[dict]  = None
-
-class ZoneExtractRequest(BaseModel):
-    b64:  str
-    mime: str = "image/jpeg"
-
-class NumberExtractRequest(BaseModel):
-    b64:  str
-    mime: str  = "image/jpeg"
-    kind: str  = "number"   # "money" (sale total) | "volume" (gallons) | "number"
-
-class ConfigSet(BaseModel):
-    key:   str
-    value: str
-
-class ModelResult(BaseModel):
-    model: str
-    ok:    bool
-
-
-# ── config routes ────────────────────────────────────────────────────────────
-@router.get("/config")
-def get_config():
-    out = dict(CONFIG_DEFAULTS)
-    conn = get_db()
-    try:
-        for r in conn.execute("SELECT key, value FROM mpg_config").fetchall():
-            out[r["key"]] = r["value"]
-    finally:
-        conn.close()
-    return out
-
-@router.post("/config")
-def post_config(item: ConfigSet):
-    set_cfg(item.key, item.value)
-    return {"ok": True, "key": item.key, "value": item.value}
-
-
-@router.post("/model-result")
-def post_model_result(item: ModelResult):
-    """Client-reported extraction outcome. A read that returns a value is only
-    credited a success once the user keeps it (logs the fill-up); retrying,
-    re-cropping, or hand-editing the value reports a fail for that model."""
-    record_model_result(item.model, item.ok)
-    return {"ok": True}
-
-
-@router.get("/model-stats")
-def model_stats():
-    """Per-model extraction scoreboard (success/fail/last_used + success rate)."""
-    conn = get_db()
-    try:
-        rows = conn.execute(
-            "SELECT model, success, fail, last_used FROM mpg_model_stats ORDER BY model"
-        ).fetchall()
-    finally:
-        conn.close()
-    out = []
-    for r in rows:
-        total = r["success"] + r["fail"]
-        out.append({
-            "model":     r["model"],
-            "success":   r["success"],
-            "fail":      r["fail"],
-            "total":     total,
-            "rate":      round(r["success"] / total, 3) if total else None,
-            "last_used": r["last_used"],
-        })
-    return out
-
-
-# ── provider / model discovery ──────────────────────────────────────────────
-async def probe_lmstudio(base: str):
-    async with httpx.AsyncClient(timeout=5.0) as client:
-        r = await client.get(f"{base}/api/v0/models")
-        r.raise_for_status()
-        data = r.json().get("data", [])
-    return [{"id": m["id"], "vision": m.get("type") == "vlm", "state": m.get("state", "")} for m in data]
-
-async def probe_ollama(base: str):
-    async with httpx.AsyncClient(timeout=5.0) as client:
-        r = await client.get(f"{base}/api/tags")
-        r.raise_for_status()
-        data = r.json().get("models", [])
-    vmark = ("vl", "vision", "llava", "minicpm-v", "moondream", "internvl", "gemma3")
-    return [{"id": m["name"], "vision": any(k in m["name"].lower() for k in vmark), "state": ""} for m in data]
-
-
-@router.get("/providers")
-async def list_providers():
-    out = {}
-    for key, h in HOSTS.items():
-        entry = {"label": h["label"], "base": h["base"], "online": False, "models": []}
-        try:
-            entry["models"] = await probe_lmstudio(h["base"]) if key == "lmstudio" else await probe_ollama(h["base"])
-            entry["online"] = True
-        except Exception:
-            pass
-        out[key] = entry
-    out["active"] = get_cfg("active_host", "lmstudio")
-    return out
-
-
-# ── image enhancement ──────────────────────────────────────────────────────
-MAX_DIM = 1024  # longest side; minicpm-v chokes on larger crops (esp. square ones)
-
-def enhance(b64: str, mime: str) -> str:
-    try:
-        raw = base64.b64decode(b64)
-        pil = Image.open(io.BytesIO(raw))
-    except Exception:
-        raise HTTPException(status_code=400, detail="Could not decode image")
-
-    # honor EXIF rotation, then flatten to RGB (drops alpha that can confuse the model)
-    pil = ImageOps.exif_transpose(pil).convert("RGB")
-
-    # hard size cap — authoritative regardless of what the frontend sends.
-    pil.thumbnail((MAX_DIM, MAX_DIM), Image.LANCZOS)
-
-    pil = ImageEnhance.Contrast(pil).enhance(1.6)
-    pil = ImageEnhance.Sharpness(pil).enhance(2.0)
-
-    out = io.BytesIO()
-    pil.save(out, format="JPEG", quality=88)  # always JPEG — smaller, model-friendly
-    return base64.b64encode(out.getvalue()).decode()
-
-
-# ── vision call ────────────────────────────────────────────────────────────
-async def call_vision(b64: str, mime: str, prompt: str) -> dict:
-    host_key = get_cfg("active_host", "lmstudio")
-    model    = get_cfg("vision_model", "")
-    if not model:
-        raise HTTPException(status_code=400, detail="No vision model selected — pick one on the MPG page")
-    host = HOSTS.get(host_key)
-    if not host:
-        raise HTTPException(status_code=400, detail=f"Unknown host: {host_key}")
-    url = f"{host['base']}/v1/chat/completions"
-    # enhance() always emits JPEG, so the data URI mime is fixed here
-    payload = {
-        "model": model, "max_tokens": 128, "temperature": 0,
-        "messages": [{"role": "user", "content": [
-            {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64}"}},
-            {"type": "text", "text": prompt},
-        ]}]
-    }
-
-    last_err = None
-    resp = None
-    for attempt in range(2):  # one retry — first multimodal call after a model load often fails
-        try:
-            async with httpx.AsyncClient(timeout=120.0) as client:
-                resp = await client.post(url, json=payload)
-                resp.raise_for_status()
-            break
-        except httpx.HTTPStatusError as e:
-            body = e.response.text[:300]
-            last_err = f"{host['label']} HTTP {e.response.status_code}: {body}"
-        except httpx.HTTPError as e:
-            last_err = f"{host['label']} error: {str(e)}"
-    else:
-        raise HTTPException(status_code=502, detail=last_err or "Vision request failed")
-
-    try:
-        raw = resp.json()["choices"][0]["message"]["content"]
-    except Exception:
-        raise HTTPException(status_code=502, detail=f"Unexpected response: {resp.text[:300]}")
-
-    clean = raw.replace("```json", "").replace("```", "").strip()
-    # Vision models often read an odometer like 056197 and emit it verbatim as a
-    # JSON number — but leading zeros are invalid JSON, so json.loads chokes even
-    # though the digits are correct. Strip leading zeros from number literals
-    # (those following a ':', ',', or '[') before parsing. Leaves "0", "0.5",
-    # and quoted strings untouched.
-    clean = re.sub(r'([:\[,]\s*)0+(\d)', r'\1\2', clean)
-    try:
-        return json.loads(clean)
-    except json.JSONDecodeError:
-        raise HTTPException(status_code=502, detail=f"Model returned non-JSON: {raw[:200]}")
 
 
 # ── helpers ────────────────────────────────────────────────────────────────
@@ -495,70 +247,6 @@ def delete_entry(entry_id: int):
         conn.commit()
     finally:
         conn.close()
-
-
-@router.post("/extract/odometer")
-async def extract_odometer(req: ZoneExtractRequest):
-    enhanced = enhance(req.b64, req.mime)
-    prompt = (
-        "This image shows a car's dashboard with the odometer mileage display.\n"
-        "Read the exact total mileage number shown, including any leading zeros.\n"
-        "Many dashboards also show the current date and/or time — if a date is "
-        "visible anywhere in the image, read it too and return it in YYYY-MM-DD format.\n"
-        "Respond ONLY with a JSON object. No markdown, no explanation.\n"
-        'Example: {"odometer_miles": 56197, "date": "2026-05-28", "confidence": "high"}\n'
-        "confidence is high, medium, or low based on how clearly you can read the mileage.\n"
-        "If no date is visible, set date to null.\n"
-        'If you cannot read the mileage, return: {"odometer_miles": null, "date": null, "confidence": "low"}'
-    )
-    model = get_cfg("vision_model", "")
-    try:
-        result = await call_vision(enhanced, req.mime, prompt)
-    except HTTPException:
-        record_model_result(model, False)
-        raise
-    # a value coming back is only "pending" — the client credits the success when
-    # the user keeps it. A null read couldn't be read at all → fail now.
-    if result.get("odometer_miles") is None:
-        record_model_result(model, False)
-    result["enhanced_b64"] = enhanced
-    return result
-
-
-@router.post("/extract/number")
-async def extract_number(req: NumberExtractRequest):
-    """Read a SINGLE number from a tightly-cropped region. The frontend crops the
-    sale total and the gallons separately, so each call only ever sees one number —
-    far more reliable than asking the model to disambiguate fields on a full display."""
-    enhanced = enhance(req.b64, req.mime)
-    if req.kind == "money":
-        desc, ex = ("a total fuel SALE amount in dollars (the dollars charged)",
-                    '{"value": 78.14, "confidence": "high"}')
-    elif req.kind == "volume":
-        desc, ex = ("a fuel volume in GALLONS, usually with up to 3 decimal places",
-                    '{"value": 16.015, "confidence": "high"}')
-    else:
-        desc, ex = ("a single number", '{"value": 123.45, "confidence": "high"}')
-    prompt = (
-        f"This cropped image shows {desc} on a seven-segment LCD display.\n"
-        "There is only ONE number in this crop. Read every digit carefully, "
-        "including any digits after the decimal point. The display may have glare.\n"
-        "Respond ONLY with a JSON object. No markdown, no explanation.\n"
-        f"Example: {ex}\n"
-        "confidence is high, medium, or low based on how clearly you can read it.\n"
-        'If you cannot read it, return: {"value": null, "confidence": "low"}'
-    )
-    model = get_cfg("vision_model", "")
-    try:
-        result = await call_vision(enhanced, req.mime, prompt)
-    except HTTPException:
-        record_model_result(model, False)
-        raise
-    # value present = pending (client credits success on keep); null = fail now.
-    if result.get("value") is None:
-        record_model_result(model, False)
-    result["enhanced_b64"] = enhanced
-    return result
 
 
 # ── nearby fuel stations (OpenStreetMap / Overpass proxy) ────────────────────

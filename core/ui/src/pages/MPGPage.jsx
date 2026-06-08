@@ -7,6 +7,36 @@ import "leaflet/dist/leaflet.css";
 
 const API     = "/api/mpg";
 const VEH_API = "/api/vehicles";
+const LM      = "/api/lmstudio";   // vision lives in the LM Studio module now
+
+// Domain prompts sent to the generic /api/lmstudio/vision endpoint. They tell the
+// model exactly what JSON to return; the response comes back as { result, ... }.
+const ODOMETER_PROMPT =
+  "This image shows a car's dashboard with the odometer mileage display.\n" +
+  "Read the exact total mileage number shown, including any leading zeros.\n" +
+  "Many dashboards also show the current date and/or time — if a date is " +
+  "visible anywhere in the image, read it too and return it in YYYY-MM-DD format.\n" +
+  "Respond ONLY with a JSON object. No markdown, no explanation.\n" +
+  'Example: {"odometer_miles": 56197, "date": "2026-05-28", "confidence": "high"}\n' +
+  "confidence is high, medium, or low based on how clearly you can read the mileage.\n" +
+  "If no date is visible, set date to null.\n" +
+  'If you cannot read the mileage, return: {"odometer_miles": null, "date": null, "confidence": "low"}';
+
+function numberPrompt(kind) {
+  const [desc, ex] =
+    kind === "money"  ? ["a total fuel SALE amount in dollars (the dollars charged)", '{"value": 78.14, "confidence": "high"}']
+    : kind === "volume" ? ["a fuel volume in GALLONS, usually with up to 3 decimal places", '{"value": 16.015, "confidence": "high"}']
+    : ["a single number", '{"value": 123.45, "confidence": "high"}'];
+  return (
+    `This cropped image shows ${desc} on a seven-segment LCD display.\n` +
+    "There is only ONE number in this crop. Read every digit carefully, " +
+    "including any digits after the decimal point. The display may have glare.\n" +
+    "Respond ONLY with a JSON object. No markdown, no explanation.\n" +
+    `Example: ${ex}\n` +
+    "confidence is high, medium, or low based on how clearly you can read it.\n" +
+    'If you cannot read it, return: {"value": null, "confidence": "low"}'
+  );
+}
 
 const fmt = (n, dec = 1) => (n == null ? "—" : Number(n).toFixed(dec));
 const fmtDollar = (n, dec = 2) => (n == null ? "—" : "$" + Number(n).toFixed(dec));
@@ -302,20 +332,21 @@ export default function MPGPage({ showToast, showConfirm }) {
 
   const loadModels = useCallback(async () => {
     try {
-      const [provRes, cfgRes] = await Promise.all([fetch(API + "/providers"), fetch(API + "/config")]);
-      const prov = await provRes.json();
-      const cfg  = await cfgRes.json();
-      const host = prov[prov.active || "lmstudio"] || {};
-      setModelHost(host.label || "");
-      setVisionModels((host.models || []).filter(m => m.vision));
-      setActiveModel(cfg["vision_model"] || "");
-    } catch { setVisionModels([]); }
+      // /status (and /config) 404 when the LM Studio module isn't installed/enabled
+      const [stRes, cfgRes] = await Promise.all([fetch(LM + "/status"), fetch(LM + "/config")]);
+      if (!stRes.ok) { setVisionModels([]); setModelHost(""); return; }
+      const st  = await stRes.json();
+      const cfg = cfgRes.ok ? await cfgRes.json() : {};
+      setModelHost("LM Studio");
+      setVisionModels((st.models || []).filter(m => m.vision));
+      setActiveModel(cfg.vision_model || st.vision_model || "");
+    } catch { setVisionModels([]); setModelHost(""); }
   }, []);
   useEffect(() => { loadModels(); }, [loadModels]);
 
   const loadModelStats = useCallback(async () => {
     try {
-      const r = await fetch(API + "/model-stats");
+      const r = await fetch(LM + "/model-stats");
       const d = await r.json();
       const m = {};
       (Array.isArray(d) ? d : []).forEach(s => { m[s.model] = s; });
@@ -334,7 +365,7 @@ export default function MPGPage({ showToast, showConfirm }) {
 
   const selectModel = async (id) => {
     setActiveModel(id);
-    try { await fetch(API + "/config", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ key: "vision_model", value: id }) }); } catch {}
+    try { await fetch(LM + "/config", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ key: "vision_model", value: id }) }); } catch {}
   };
 
   const pickPhoto = async (zone, file) => {
@@ -406,7 +437,7 @@ export default function MPGPage({ showToast, showConfirm }) {
 
   const reportResult = (model, ok) => {
     if (!model) return;
-    fetch(API + "/model-result", {
+    fetch(LM + "/model-result", {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ model, ok }),
     }).then(() => loadModelStats()).catch(() => {});
@@ -420,16 +451,17 @@ export default function MPGPage({ showToast, showConfirm }) {
     // overwrites it with the newer crop; a hand-edit keeps it.
   };
 
-  async function postExtract(path, body) {
-    const res = await fetch(`${API}/extract/${path}`, {
+  // generic vision call into the LM Studio module: returns { result, enhanced_b64, model }
+  async function postVision(prompt, b64) {
+    const res = await fetch(`${LM}/vision`, {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
+      body: JSON.stringify({ b64, mime: "image/jpeg", prompt }),
     });
     if (!res.ok) {
       const txt = await res.text();
       let msg = txt;
       try { msg = JSON.parse(txt).detail || txt; } catch {}
-      throw new Error((msg || "").slice(0, 200) || `Extract failed (${res.status})`);
+      throw new Error((msg || "").slice(0, 200) || `Vision failed (${res.status})`);
     }
     return res.json();
   }
@@ -438,18 +470,23 @@ export default function MPGPage({ showToast, showConfirm }) {
     failPending("odometer");   // re-reading supersedes any prior pending read
     setOdoBusy(true); setOdoStatus("");
     try {
-      const data = await postExtract("odometer", { b64, mime: "image/jpeg" });
-      const conf = data.confidence || "low";
+      const data  = await postVision(ODOMETER_PROMPT, b64);
+      const r     = data.result || {};
+      const model = data.model || activeModel;
+      const conf  = r.confidence || "low";
       // keep the crop whether or not the read succeeded — it's your photo record
       if (data.enhanced_b64) pendingImg.current.odometer = data.enhanced_b64;
-      if (data.odometer_miles != null) {
-        const datePatch = /^\d{4}-\d{2}-\d{2}$/.test(data.date || "") ? { date: data.date } : {};
-        setForm(f => ({ ...f, odometer: String(data.odometer_miles), ...datePatch }));
+      if (r.odometer_miles != null) {
+        const datePatch = /^\d{4}-\d{2}-\d{2}$/.test(r.date || "") ? { date: r.date } : {};
+        setForm(f => ({ ...f, odometer: String(r.odometer_miles), ...datePatch }));
         const dateNote = datePatch.date ? ` · ${datePatch.date}` : "";
-        setOdoStatus(conf === "low" ? `${data.odometer_miles}${dateNote} — verify` : `${data.odometer_miles}${dateNote} ✓`);
+        setOdoStatus(conf === "low" ? `${r.odometer_miles}${dateNote} — verify` : `${r.odometer_miles}${dateNote} ✓`);
         setOdoType(conf === "low" ? "warn" : "ok");
-        pending.current.odometer = activeModel;          // pending until kept
-      } else { setOdoStatus("Couldn't read — enter manually"); setOdoType("err"); }
+        pending.current.odometer = model;                // pending until kept
+      } else {
+        reportResult(model, false);                      // a null read is a miss for this model
+        setOdoStatus("Couldn't read — enter manually"); setOdoType("err");
+      }
     } catch (e) { setOdoStatus("Error: " + e.message); setOdoType("err"); }
     finally { setOdoBusy(false); loadModelStats(); }
   };
@@ -460,13 +497,15 @@ export default function MPGPage({ showToast, showConfirm }) {
     failPending(field);   // re-reading supersedes any prior pending read
     setPumpBusy(true);
     try {
-      const data = await postExtract("number", { b64, mime: "image/jpeg", kind });
-      const conf = data.confidence || "low";
+      const data  = await postVision(numberPrompt(kind), b64);
+      const r     = data.result || {};
+      const model = data.model || activeModel;
+      const conf  = r.confidence || "low";
       // keep the crop whether or not the read succeeded — it's your photo record
       if (data.enhanced_b64) pendingImg.current[field] = data.enhanced_b64;
-      if (data.value != null) {
+      if (r.value != null) {
         if (kind === "money") {
-          const total = Number(data.value).toFixed(2);
+          const total = Number(r.value).toFixed(2);
           setForm(f => {
             const next = { ...f, total };
             const g = parseFloat(next.gallons);
@@ -475,7 +514,7 @@ export default function MPGPage({ showToast, showConfirm }) {
           });
           setPumpStatus(conf === "low" ? `Sale $${total} — verify` : `Sale $${total} ✓`);
         } else {
-          const gallons = Number(data.value).toFixed(3);
+          const gallons = Number(r.value).toFixed(3);
           setForm(f => {
             const next = { ...f, gallons };
             const t = parseFloat(next.total);
@@ -485,8 +524,9 @@ export default function MPGPage({ showToast, showConfirm }) {
           setPumpStatus(conf === "low" ? `Gallons ${gallons} — verify` : `Gallons ${gallons} ✓`);
         }
         setPumpType(conf === "low" ? "warn" : "ok");
-        pending.current[field] = activeModel;            // pending until kept
+        pending.current[field] = model;                  // pending until kept
       } else {
+        reportResult(model, false);                      // a null read is a miss for this model
         setPumpStatus(`Couldn't read ${kind === "money" ? "sale" : "gallons"} — enter manually`);
         setPumpType("err");
       }
@@ -709,7 +749,7 @@ export default function MPGPage({ showToast, showConfirm }) {
                   Vision model {modelHost && <span style={{ opacity: 0.6 }}>· {modelHost}</span>}
                 </label>
                 {visionModels.length === 0 ? (
-                  <div style={{ fontSize: 11, color: "#f59e0b" }}>No vision models found. Check AI Host in Settings.</div>
+                  <div style={{ fontSize: 11, color: "#f59e0b" }}>No vision models found. Check the LM Studio module in Settings.</div>
                 ) : (
                   <select value={activeModel} onChange={e => selectModel(e.target.value)} style={{ ...inputStyle, fontSize: 12 }}>
                     <option value="">— pick a model —</option>
