@@ -140,6 +140,16 @@ export default function GrovekeeperPage() {
   const [saveName, setSaveName] = useState('')
   const [collapsed, setCollapsed] = useState(false)
   const [prog, setProg] = useState(0)   // growth readout for the scrub bar
+  const [immersive, setImmersiveState] = useState(false)  // hide ALL thrive chrome
+
+  // Immersive mode hides the top nav (via App's Shell) plus this page's own
+  // panel + grip + scrub bar, leaving only the canvas — clean for F11. Esc exits.
+  const setImmersive = (on) => {
+    setImmersiveState(on)
+    window.dispatchEvent(new CustomEvent('thrive:immersive', { detail: on }))
+  }
+  // restore thrive's chrome whenever we leave the page
+  useEffect(() => () => window.dispatchEvent(new CustomEvent('thrive:immersive', { detail: false })), [])
 
   // create the renderer once
   useEffect(() => {
@@ -202,11 +212,11 @@ export default function GrovekeeperPage() {
       const tag = (e.target.tagName || '').toLowerCase()
       if (tag === 'input' || tag === 'textarea' || tag === 'select') return
       if (e.key === 'h' || e.key === 'H') setCollapsed(c => !c)
-      else if (e.key === 'Escape') setCollapsed(true)
+      else if (e.key === 'Escape') { if (immersive) setImmersive(false); else setCollapsed(true) }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [])
+  }, [immersive])
 
   // apply a {toggles, params, quality} blob to the live renderer
   const apply = (data) => {
@@ -276,8 +286,8 @@ export default function GrovekeeperPage() {
     <div style={{ position: 'fixed', inset: 0, overflow: 'hidden' }}>
       <canvas ref={canvasRef} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', display: 'block' }} />
 
-      {/* growth scrub — bottom center, like the standalone demo */}
-      <div style={{ position: 'absolute', bottom: 18, left: '50%', transform: 'translateX(-50%)', zIndex: 12,
+      {/* growth scrub — bottom center, like the standalone demo (hidden when immersive) */}
+      {!immersive && <div style={{ position: 'absolute', bottom: 18, left: '50%', transform: 'translateX(-50%)', zIndex: 12,
         display: 'flex', alignItems: 'center', gap: 12, ...panel, padding: '8px 14px', borderRadius: 999 }}>
         <button style={btnS} onClick={() => { tr && tr.replay(); setProg(0) }}>↻ replay</button>
         <input type="range" min={0} max={1} step={0.001} value={prog}
@@ -285,10 +295,10 @@ export default function GrovekeeperPage() {
           onMouseUp={e => onScrubDone(+e.target.value)} onTouchEnd={e => onScrubDone(prog)}
           style={{ width: 160, accentColor: ACCENT, cursor: 'pointer' }} />
         <span style={{ width: 38, textAlign: 'right', fontFamily: 'monospace', fontSize: 12, color: 'var(--text-tertiary,#888)' }}>{Math.round(prog * 100)}%</span>
-      </div>
+      </div>}
 
-      {/* collapse grip */}
-      <button onClick={() => setCollapsed(c => !c)} title={collapsed ? 'Show panel (H)' : 'Hide panel (H)'}
+      {/* collapse grip — hidden in immersive mode */}
+      {!immersive && <button onClick={() => setCollapsed(c => !c)} title={collapsed ? 'Show panel (H)' : 'Hide panel (H)'}
         style={{
           position: 'absolute', top: 48, bottom: 0, right: collapsed ? 0 : SIDEBAR_W, width: 18, zIndex: 11,
           display: 'flex', alignItems: 'center', justifyContent: 'center', margin: 0, padding: 0,
@@ -297,13 +307,20 @@ export default function GrovekeeperPage() {
           cursor: 'pointer', fontSize: 15, transition: 'right .15s',
         }}>
         {collapsed ? '‹' : '›'}
-      </button>
+      </button>}
 
-      {!collapsed && (
+      {!collapsed && !immersive && (
       <div style={{ position: 'absolute', top: 48, right: 0, bottom: 0, width: SIDEBAR_W, ...panel, border: 'none', borderLeft: '1px solid var(--border-color,#2a2a2a)', borderRadius: 0, overflowY: 'auto', zIndex: 10 }}>
         <div style={{ marginBottom: 12 }}>
           <span style={{ fontSize: 11, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--text-tertiary,#888)' }}>Grovekeeper</span>
         </div>
+
+        {/* hide all of thrive's chrome (top nav + panel + scrub) for a clean canvas;
+            pair with F11 for true fullscreen. Esc brings it all back. */}
+        <button style={{ ...btnS, width: '100%', marginBottom: 12 }}
+          onClick={() => { setImmersive(true); showToast('UI hidden — press Esc to bring it back', 'success') }}>
+          ⛶ Hide UI
+        </button>
 
         <div style={{ marginBottom: 12 }}>
           <div style={lbl}>Preset</div>

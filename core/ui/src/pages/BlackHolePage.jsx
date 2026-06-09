@@ -101,6 +101,16 @@ export default function BlackHolePage() {
   const [, force] = useState(0)                       // re-render for slider readouts
   const [saveName, setSaveName] = useState('')
   const [collapsed, setCollapsed] = useState(false)  // popout panel state
+  const [immersive, setImmersiveState] = useState(false)  // hide ALL thrive chrome
+
+  // Immersive mode hides the top nav (via App's Shell) plus this page's own
+  // panel + grip, leaving only the canvas — clean for F11 fullscreen. Esc exits.
+  const setImmersive = (on) => {
+    setImmersiveState(on)
+    window.dispatchEvent(new CustomEvent('thrive:immersive', { detail: on }))
+  }
+  // restore thrive's chrome whenever we leave the page
+  useEffect(() => () => window.dispatchEvent(new CustomEvent('thrive:immersive', { detail: false })), [])
 
   // create the renderer once
   useEffect(() => {
@@ -142,11 +152,11 @@ export default function BlackHolePage() {
       const tag = (e.target.tagName || '').toLowerCase()
       if (tag === 'input' || tag === 'textarea' || tag === 'select') return
       if (e.key === 'h' || e.key === 'H') setCollapsed(c => !c)
-      else if (e.key === 'Escape') setCollapsed(true)
+      else if (e.key === 'Escape') { if (immersive) setImmersive(false); else setCollapsed(true) }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [])
+  }, [immersive])
 
   // apply a {toggles, params, quality} blob to the live renderer
   const apply = (data) => {
@@ -223,8 +233,9 @@ export default function BlackHolePage() {
       <canvas ref={canvasRef} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', display: 'block' }} />
 
       {/* slim full-height grip on the panel divider — click to collapse, and (at
-          the screen edge when collapsed) to pull the panel back out. H / Esc too. */}
-      <button onClick={() => setCollapsed(c => !c)} title={collapsed ? 'Show panel (H)' : 'Hide panel (H)'}
+          the screen edge when collapsed) to pull the panel back out. H / Esc too.
+          Hidden entirely in immersive mode. */}
+      {!immersive && <button onClick={() => setCollapsed(c => !c)} title={collapsed ? 'Show panel (H)' : 'Hide panel (H)'}
         style={{
           position: 'absolute', top: 48, bottom: 0, right: collapsed ? 0 : SIDEBAR_W, width: 18, zIndex: 11,
           display: 'flex', alignItems: 'center', justifyContent: 'center', margin: 0, padding: 0,
@@ -233,14 +244,22 @@ export default function BlackHolePage() {
           cursor: 'pointer', fontSize: 15, transition: 'right .15s',
         }}>
         {collapsed ? '‹' : '›'}
-      </button>
+      </button>}
 
-      {/* control panel — docked right, full height, collapses behind the grip */}
-      {!collapsed && (
+      {/* control panel — docked right, full height, collapses behind the grip;
+          hidden in immersive mode (Esc to bring all of thrive back) */}
+      {!collapsed && !immersive && (
       <div style={{ position: 'absolute', top: 48, right: 0, bottom: 0, width: SIDEBAR_W, ...panel, border: 'none', borderLeft: '1px solid var(--border-color,#2a2a2a)', borderRadius: 0, overflowY: 'auto', zIndex: 10 }}>
         <div style={{ marginBottom: 12 }}>
           <span style={{ fontSize: 11, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--text-tertiary,#888)' }}>Black Hole</span>
         </div>
+
+        {/* hide all of thrive's chrome (top nav + this panel) for a clean canvas;
+            pair with F11 for true fullscreen. Esc brings it all back. */}
+        <button style={{ ...btnS, width: '100%', marginBottom: 12 }}
+          onClick={() => { setImmersive(true); showToast('UI hidden — press Esc to bring it back', 'success') }}>
+          ⛶ Hide UI
+        </button>
 
         <div style={{ marginBottom: 12 }}>
           <div style={lbl}>Preset</div>

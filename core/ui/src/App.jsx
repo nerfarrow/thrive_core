@@ -221,11 +221,20 @@ function RootRoute() {
 
 // ── shell ─────────────────────────────────────────────────────────────────────
 function Shell() {
+  // Immersive mode: a page (e.g. /blackhole) can hide ALL thrive chrome — top
+  // nav included — leaving just its own canvas, so F11 gives a clean fullscreen.
+  // The page owns the toggle and the way back out (Esc); it fires this event.
+  const [immersive, setImmersive] = useState(false)
+  useEffect(() => {
+    const onImmersive = (e) => setImmersive(!!e.detail)
+    window.addEventListener('thrive:immersive', onImmersive)
+    return () => window.removeEventListener('thrive:immersive', onImmersive)
+  }, [])
   return (
     <>
       <AmbientBackground />
-      <TopNav />
-      <main style={{ marginTop: 48, minHeight: 'calc(100vh - 48px)' }}>
+      {!immersive && <TopNav />}
+      <main style={{ marginTop: immersive ? 0 : 48, minHeight: immersive ? '100vh' : 'calc(100vh - 48px)' }}>
         <Routes>
           <Route path="/"          element={<RootRoute />} />
           <Route path="/home"      element={<HomePage />} />
