@@ -174,25 +174,41 @@ def model_stats():
 
 # ── model discovery ──────────────────────────────────────────────────────────
 async def probe(base: str):
-    """List models the host advertises. LM Studio tags vision models type=='vlm'."""
+    """List models the host advertises, via LM Studio's /api/v1/models — richer
+    than the old /api/v0 record: human display names, parameter counts, sizes,
+    and a capabilities object. Shape notes: `key` is the stable model id (the one
+    chat completions accept); `display_name` does NOT distinguish quant variants;
+    type is "llm" | "embedding" (no "vlm" — vision lives in capabilities); load
+    state is the `loaded_instances` array, each instance carrying its context
+    length under `config`."""
     async with httpx.AsyncClient(timeout=5.0) as client:
-        r = await client.get(f"{base}/api/v0/models")
+        r = await client.get(f"{base}/api/v1/models")
         r.raise_for_status()
-        data = r.json().get("data", [])
-    # LM Studio's enhanced /api/v0/models record carries more than we filter for —
-    # surface quantization + context lengths too (no GPU-offload data is exposed
-    # over the REST API; that only lives in the SDK / `lms ps`).
-    return [{
-        "id":         m["id"],
-        "vision":     m.get("type") == "vlm",
-        "type":       m.get("type"),
-        "state":      m.get("state", ""),
-        "arch":       m.get("arch"),
-        "publisher":  m.get("publisher"),
-        "quant":      m.get("quantization"),
-        "max_ctx":    m.get("max_context_length"),
-        "loaded_ctx": m.get("loaded_context_length"),
-    } for m in data]
+        data = r.json().get("models", [])
+    out = []
+    for m in data:
+        caps_obj = m.get("capabilities") or {}
+        # capabilities object → list of enabled capability names, with
+        # "trained_for_tool_use" shortened to "tool_use" for the UI badges
+        caps = [("tool_use" if k == "trained_for_tool_use" else k)
+                for k, v in caps_obj.items() if v]
+        inst = (m.get("loaded_instances") or [None])[0]
+        out.append({
+            "id":           m["key"],
+            "name":         m.get("display_name") or m["key"],
+            "vision":       bool(caps_obj.get("vision")),
+            "type":         m.get("type"),
+            "state":        "loaded" if inst else "not-loaded",
+            "arch":         m.get("architecture"),
+            "publisher":    m.get("publisher"),
+            "quant":        (m.get("quantization") or {}).get("name"),
+            "params":       m.get("params_string"),
+            "size_bytes":   m.get("size_bytes"),
+            "max_ctx":      m.get("max_context_length"),
+            "loaded_ctx":   (inst.get("config") or {}).get("context_length") if inst else None,
+            "capabilities": caps,
+        })
+    return out
 
 
 @router.get("/status")

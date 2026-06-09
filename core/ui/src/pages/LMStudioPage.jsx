@@ -3,9 +3,9 @@
 // thrive UI
 //
 // Dashboard for the local LM Studio host: connection status + editable host URL,
-// a browser of every model the host advertises (grouped by type, ● = loaded,
-// pick the default vision model), a vision test playground (drop an image + a
-// prompt → /lmstudio/vision → parsed JSON + the enhanced crop), and the per-model
+// a sortable table of every model the host advertises (skills, quant, context,
+// run counts; ● = loaded), a vision test playground (drop an image + a prompt →
+// /lmstudio/vision → parsed JSON + the enhanced crop), and the per-model
 // extraction scoreboard. The module also installs a compact panel into Settings.
 // =============================================================================
 import { useState, useEffect, useCallback, useRef } from 'react'
@@ -14,23 +14,40 @@ import { useToast } from '../context/ToastContext'
 
 const ACCENT = '#a855f7'   // module color
 
-// Per-model capability badges ("skills"), shown inline next to each model in
-// place of the old type-grouped headers. Derived from the model's type + vision
-// flag — a VLM does both vision and chat.
+// Per-model capability badges ("skills"). Derived from the model's type plus
+// LM Studio's `capabilities` array — known capabilities get their own icon,
+// anything new falls back to a generic badge so every capability the host
+// reports is visible. No badge for plain chat: that a model can chat is a given.
 const SKILLS = {
-  vision: { icon: '👁', label: 'Vision', color: ACCENT },
-  chat:   { icon: '💬', label: 'Chat / text', color: '#3b82f6' },
-  embed:  { icon: '🔢', label: 'Embeddings', color: '#22c55e' },
+  vision:   { icon: '👁', label: 'Vision', color: ACCENT },
+  embed:    { icon: '🔢', label: 'Embeddings', color: '#22c55e' },
+  tool_use: { icon: '🔧', label: 'Tool use', color: '#f59e0b' },
 }
 const skillsOf = (m) => {
+  const caps = m.capabilities || []
   const out = []
-  if (m.vision) out.push(SKILLS.vision)
-  if (m.type === 'vlm' || m.type === 'llm') out.push(SKILLS.chat)
-  if (m.type === 'embeddings') out.push(SKILLS.embed)
+  if (m.vision || caps.includes('vision')) out.push(SKILLS.vision)
+  if (m.type === 'embedding') out.push(SKILLS.embed)
+  for (const c of caps) {
+    if (c === 'vision') continue   // already badged above
+    out.push(SKILLS[c] || { icon: '✨', label: c.replace(/_/g, ' '), color: '#888' })
+  }
   return out
 }
-// flat-list ordering now that headers are gone: vision/chat first, embeddings, then other
-const TYPE_RANK = { vlm: 0, llm: 1, embeddings: 2 }
+// default table ordering: vision models first, then chat, then embeddings
+const typeRank = (m) => m.vision ? 0 : m.type === 'llm' ? 1 : m.type === 'embedding' ? 2 : 9
+
+// numeric ordering for quant strings: "Q4_K_M" → 4, "8bit" → 8; null when unknown
+const quantNum = (q) => { const m = /(\d+(?:\.\d+)?)/.exec(q || ''); return m ? +m[1] : null }
+
+// numeric ordering for params strings: "270M" → 2.7e8, "12B" → 1.2e10; null when unknown
+const paramsNum = (p) => {
+  const m = /^([\d.]+)\s*([kmb]?)/i.exec(p || '')
+  return m ? +m[1] * ({ k: 1e3, m: 1e6, b: 1e9 }[m[2].toLowerCase()] || 1) : null
+}
+
+// model-table column layout, shared by the header row and every body row
+const MODEL_COLS = '14px 56px minmax(0,1fr) 58px 100px 78px 84px 64px'
 
 const DEFAULT_PROMPT =
   'Read all the text and numbers visible in this image. ' +
@@ -53,6 +70,7 @@ export default function LMStudioPage() {
   const [visModel, setVisModel] = useState('')   // configured default
   const [stats,    setStats]    = useState([])
   const [probing,  setProbing]  = useState(true)
+  const [sort,     setSort]     = useState({ key: 'type', dir: 1 })   // model-table sort
 
   // vision tester
   const [testModel, setTestModel] = useState('')
@@ -110,9 +128,32 @@ export default function LMStudioPage() {
   const visionModels = models.filter(m => m.vision)
   const statByModel  = Object.fromEntries(stats.map(s => [s.model, s]))
 
-  // flat, sensibly-ordered list (no type headers anymore)
-  const sortedModels = [...models].sort((a, b) =>
-    (TYPE_RANK[a.type] ?? 9) - (TYPE_RANK[b.type] ?? 9) || a.id.localeCompare(b.id))
+  // sortable model table: click a header to sort by it, again to flip direction
+  const sortVal = {
+    type:   typeRank,
+    id:     m => (m.name || m.id).toLowerCase(),
+    params: m => paramsNum(m.params),
+    pub:    m => m.publisher?.toLowerCase(),
+    quant:  m => quantNum(m.quant),
+    ctx:    m => m.max_ctx,
+    runs:   m => statByModel[m.id]?.total ?? 0,
+  }[sort.key]
+  const sortedModels = [...models].sort((a, b) => {
+    const va = sortVal(a), vb = sortVal(b)
+    let d
+    if (va == null || vb == null) d = (va == null) - (vb == null)   // missing values sink, either direction
+    else d = (typeof va === 'string' ? va.localeCompare(vb) : va - vb) * sort.dir
+    return d || a.id.localeCompare(b.id)
+  })
+  const onSort = (key) => setSort(s => ({ key, dir: s.key === key ? -s.dir : 1 }))
+  const Th = ({ k, label, align }) => (
+    <button onClick={() => onSort(k)} title={`Sort by ${label.toLowerCase()}`}
+      style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontFamily: 'inherit',
+        fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.1em', textAlign: align || 'left',
+        color: sort.key === k ? 'var(--text-secondary,#aaa)' : 'var(--text-tertiary,#666)' }}>
+      {label}{sort.key === k ? (sort.dir === 1 ? ' ↑' : ' ↓') : ''}
+    </button>
+  )
   const visionCount = visionModels.length
   const loadedCount = models.filter(m => m.state === 'loaded').length
 
@@ -142,49 +183,76 @@ export default function LMStudioPage() {
             <div style={{ fontSize: 12, color: 'var(--text-tertiary,#888)' }}>
               {online ? 'Host is online but advertises no models.' : 'Connect to a host above to list its models.'}
             </div>
-          ) : sortedModels.map(m => {
-            const isDefault = m.id === visModel
-            const s = statByModel[m.id]
-            const loaded = m.state === 'loaded'
-            // quant · max ctx · (loaded ctx, only while loaded)
-            const meta = [
-              m.quant,
-              m.max_ctx != null && `${fmtK(m.max_ctx)} ctx`,
-              loaded && m.loaded_ctx != null && `loaded ${m.loaded_ctx.toLocaleString()}`,
-            ].filter(Boolean).join('  ·  ')
-            return (
-              <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 16px' }}>
-                <span title={loaded ? 'loaded' : 'not loaded'}
-                  style={{ width: 7, height: 7, borderRadius: '50%', flexShrink: 0, background: loaded ? 'var(--color-success,#22c55e)' : 'var(--border-color,#444)' }} />
-                {/* skill badges — what this model can do */}
-                <span style={{ display: 'flex', gap: 3, flexShrink: 0 }}>
-                  {skillsOf(m).map(sk => (
-                    <span key={sk.label} title={sk.label}
-                      style={{ fontSize: 11, lineHeight: 1, padding: '3px 5px', borderRadius: 5, background: `${sk.color}22`, cursor: 'help' }}>
-                      {sk.icon}
-                    </span>
-                  ))}
-                </span>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontFamily: 'monospace', fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: loaded ? 'var(--text-primary,#e8e6e0)' : 'var(--text-secondary,#aaa)' }} title={m.id}>{m.id}</div>
-                  {meta && <div style={{ fontSize: 9, color: loaded ? 'var(--text-secondary,#999)' : 'var(--text-tertiary,#666)', fontFamily: 'monospace', marginTop: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{meta}</div>}
-                </div>
-                {s && s.total > 0 && (
-                  <span style={{ fontSize: 10, color: 'var(--text-tertiary,#888)', flexShrink: 0 }}>
-                    <span style={{ color: 'var(--color-success,#22c55e)' }}>✓{s.success}</span>{' '}
-                    <span style={{ color: 'var(--color-danger,#ef4444)' }}>✗{s.fail}</span>
-                  </span>
-                )}
-                {isDefault && (
-                  <span title="Default vision model — change in Settings → LM Studio"
-                    style={{ flexShrink: 0, padding: '3px 9px', fontSize: 9, borderRadius: 6, fontFamily: 'monospace',
-                      textTransform: 'uppercase', letterSpacing: '0.08em', background: ACCENT, color: '#0f0f0f' }}>
-                    ✓ default
-                  </span>
-                )}
+          ) : (
+            <>
+              {/* header row — click a column to sort */}
+              <div style={{ display: 'grid', gridTemplateColumns: MODEL_COLS, gap: 8, alignItems: 'center', padding: '6px 16px' }}>
+                <span />
+                <Th k="type"  label="Skills" />
+                <Th k="id"     label="Model" />
+                <Th k="params" label="Params" />
+                <Th k="pub"    label="Publisher" />
+                <Th k="quant"  label="Quant" />
+                <Th k="ctx"   label="Ctx" align="right" />
+                <Th k="runs"  label="Runs" align="right" />
               </div>
-            )
-          })}
+              {sortedModels.map(m => {
+                const isDefault = m.id === visModel
+                const s = statByModel[m.id]
+                const loaded = m.state === 'loaded'
+                return (
+                  <div key={m.id} style={{ display: 'grid', gridTemplateColumns: MODEL_COLS, gap: 8, alignItems: 'center', padding: '6px 16px', borderTop: '1px solid var(--border-color,#2a2a2a)' }}>
+                    <span title={loaded ? 'loaded' : 'not loaded'}
+                      style={{ width: 7, height: 7, borderRadius: '50%', background: loaded ? 'var(--color-success,#22c55e)' : 'var(--border-color,#444)' }} />
+                    {/* skill badges — what this model can do */}
+                    <span style={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
+                      {skillsOf(m).map(sk => (
+                        <span key={sk.label} title={sk.label}
+                          style={{ fontSize: 11, lineHeight: 1, padding: '3px 5px', borderRadius: 5, background: `${sk.color}22`, cursor: 'help' }}>
+                          {sk.icon}
+                        </span>
+                      ))}
+                    </span>
+                    <div style={{ minWidth: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span style={{ fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: loaded ? 'var(--text-primary,#e8e6e0)' : 'var(--text-secondary,#aaa)' }} title={m.id}>{m.name || m.id}</span>
+                      {isDefault && (
+                        <span title="Default vision model — change in Settings → LM Studio"
+                          style={{ flexShrink: 0, padding: '2px 7px', fontSize: 9, borderRadius: 6, fontFamily: 'monospace',
+                            textTransform: 'uppercase', letterSpacing: '0.08em', background: ACCENT, color: '#0f0f0f' }}>
+                          ✓ default
+                        </span>
+                      )}
+                    </div>
+                    <span style={{ fontFamily: 'monospace', fontSize: 11, color: 'var(--text-secondary,#999)', whiteSpace: 'nowrap' }}>
+                      {m.params || '—'}
+                    </span>
+                    <span style={{ fontFamily: 'monospace', fontSize: 11, color: 'var(--text-secondary,#999)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={m.publisher || undefined}>
+                      {m.publisher || '—'}
+                    </span>
+                    <span style={{ fontFamily: 'monospace', fontSize: 11, color: 'var(--text-secondary,#999)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={m.quant || undefined}>
+                      {m.quant || '—'}
+                    </span>
+                    <div style={{ textAlign: 'right', fontFamily: 'monospace' }}>
+                      <div style={{ fontSize: 11, color: 'var(--text-secondary,#999)' }}>{m.max_ctx != null ? fmtK(m.max_ctx) : '—'}</div>
+                      {loaded && m.loaded_ctx != null && (
+                        <div style={{ fontSize: 9, color: 'var(--text-tertiary,#666)' }} title={`loaded with ${m.loaded_ctx.toLocaleString()} ctx`}>
+                          ▸ {fmtK(m.loaded_ctx)}
+                        </div>
+                      )}
+                    </div>
+                    <span style={{ fontSize: 10, textAlign: 'right', color: 'var(--text-tertiary,#888)' }}>
+                      {s && s.total > 0 ? (
+                        <>
+                          <span style={{ color: 'var(--color-success,#22c55e)' }}>✓{s.success}</span>{' '}
+                          <span style={{ color: 'var(--color-danger,#ef4444)' }}>✗{s.fail}</span>
+                        </>
+                      ) : '—'}
+                    </span>
+                  </div>
+                )
+              })}
+            </>
+          )}
         </div>
       </div>
 
