@@ -18,6 +18,7 @@ export default function LMStudioPanel() {
   const [baseInput, setBaseInput] = useState('')
   const [online,    setOnline]    = useState(false)
   const [models,    setModels]    = useState([])
+  const [visModel,  setVisModel]  = useState('')   // configured default vision model
   const [probing,   setProbing]   = useState(true)
   const [savingUrl, setSavingUrl] = useState(false)
 
@@ -28,6 +29,7 @@ export default function LMStudioPanel() {
       setBase(st.base || ''); setBaseInput(st.base || '')
       setOnline(!!st.online)
       setModels(Array.isArray(st.models) ? st.models : [])
+      setVisModel(st.vision_model || '')
     } catch { setOnline(false); setModels([]) }
     finally { setProbing(false) }
   }, [])
@@ -42,7 +44,14 @@ export default function LMStudioPanel() {
     catch {} finally { setSavingUrl(false) }
   }
 
-  const visionCount = models.filter(m => m.vision).length
+  const saveVisModel = async (id) => {
+    setVisModel(id)
+    try { await api.post('/lmstudio/config', { key: 'vision_model', value: id }) }
+    catch {}
+  }
+
+  const visionModels = models.filter(m => m.vision)
+  const visionCount  = visionModels.length
 
   return (
     <div style={{ padding: 16 }}>
@@ -62,9 +71,25 @@ export default function LMStudioPanel() {
         </span>
         {!probing && <button onClick={loadStatus} style={{ ...btnS, padding: '3px 8px', fontSize: 9 }}>↻ Refresh</button>}
       </div>
-      <div style={{ fontSize: 10, color: 'var(--text-tertiary,#666)', marginTop: 8 }}>
-        OpenAI-compatible LM Studio server (Developer → Start Server). Pick the default vision
-        model and test it on the <strong>LM Studio</strong> page.
+
+      {/* default vision model — used by other modules' image extraction */}
+      <div style={{ marginTop: 16 }}>
+        <label style={lbl}>Default vision model</label>
+        {visionModels.length === 0 ? (
+          <div style={{ fontSize: 11, color: 'var(--text-tertiary,#888)' }}>
+            {online ? 'No vision models on the host — load a VLM in LM Studio.' : 'Connect to a host to pick one.'}
+          </div>
+        ) : (
+          <select value={visModel} onChange={e => saveVisModel(e.target.value)} style={{ ...inp, fontSize: 12 }}>
+            <option value="">— none —</option>
+            {visionModels.map(m => <option key={m.id} value={m.id}>{m.id}{m.state === 'loaded' ? ' ●' : ''}</option>)}
+          </select>
+        )}
+      </div>
+
+      <div style={{ fontSize: 10, color: 'var(--text-tertiary,#666)', marginTop: 12 }}>
+        OpenAI-compatible LM Studio server (Developer → Start Server). Test the selected
+        model on the <strong>LM Studio</strong> page.
       </div>
     </div>
   )
