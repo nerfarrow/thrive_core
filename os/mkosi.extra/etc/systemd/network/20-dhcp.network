@@ -1,0 +1,8 @@
+# thriveOS networking: bring up any wired ethernet via DHCP using systemd-networkd.
+# Replaces NetworkManager (dropped) so network-online.target is reliably reached on
+# a headless appliance — which thrive.service waits on before cloning + starting.
+[Match]
+Name=en* eth*
+
+[Network]
+DHCP=yes

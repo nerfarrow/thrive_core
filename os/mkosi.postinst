@@ -5,19 +5,18 @@
 set -euo pipefail
 
 R="$BUILDROOT"
-wants="$R/etc/systemd/system/multi-user.target.wants"
-mkdir -p "$wants"
 
-# enable a unit by symlinking it into multi-user.target.wants, locating the unit
-# wherever the distro actually ships it.
+# enable a unit by symlinking it into a target's .wants dir, locating the unit
+# wherever the distro actually ships it. Second arg = target (default multi-user).
 enable_unit() {
-    local unit="$1" src=""
+    local unit="$1" target="${2:-multi-user.target}" src="" wd="$R/etc/systemd/system/${2:-multi-user.target}.wants"
+    mkdir -p "$wd"
     for d in /usr/lib/systemd/system /lib/systemd/system /etc/systemd/system; do
         if [ -e "$R$d/$unit" ]; then src="$d/$unit"; break; fi
     done
     if [ -n "$src" ]; then
-        ln -sf "$src" "$wants/$unit"
-        echo "[postinst] enabled $unit -> $src"
+        ln -sf "$src" "$wd/$unit"
+        echo "[postinst] enabled $unit -> $src (in $target)"
     else
         echo "[postinst] WARN: $unit not found in image"
     fi
@@ -26,4 +25,17 @@ enable_unit() {
 enable_unit docker.service     # container engine
 enable_unit ssh.service        # remote admin
 enable_unit thrive.service     # the appliance: pulls the thrive repo + runs core/
-# NetworkManager is enabled by its own package install.
+
+# networking: systemd-networkd brings up wired ethernet via DHCP (20-dhcp.network),
+# systemd-resolved provides DNS. This makes network-online.target reliably reached —
+# which thrive.service waits on before it can clone the repo + pull images.
+enable_unit systemd-networkd.service
+enable_unit systemd-networkd.socket              sockets.target
+enable_unit systemd-networkd-wait-online.service network-online.target
+enable_unit systemd-resolved.service
+# resolv.conf -> resolved stub so name lookups (github.com, docker hub) work
+ln -sf /run/systemd/resolve/stub-resolv.conf "$R/etc/resolv.conf"
+
+# grow the root partition+fs to fill the disk on boot (see etc/repart.d/10-root.conf)
+# so there's room for Docker images + the thrive build. Runs early via sysinit.
+enable_unit systemd-repart.service sysinit.target

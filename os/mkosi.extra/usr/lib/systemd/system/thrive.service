@@ -7,14 +7,23 @@ Requires=docker.service
 [Service]
 Type=oneshot
 RemainAfterExit=yes
+# surface bootstrap/compose output on the console (serial too) so first-boot
+# clone/build failures are visible without digging into the journal
+StandardOutput=journal+console
+StandardError=journal+console
 EnvironmentFile=-/etc/thrive/thrive.env
-# compose lives in the repo's core/ shell (mounts ../modules). systemd does not
-# expand EnvironmentFile vars here, so this mirrors THRIVE_CORE in thrive.env.
-WorkingDirectory=/opt/thrive/core
+# NOTE: do NOT set WorkingDirectory=/opt/thrive/core — systemd chdir's there BEFORE
+# ExecStartPre runs, but on first boot the repo isn't cloned yet, so the service
+# fails instantly before bootstrap can create it. Point compose at the file instead
+# (compose uses the file's dir as the project dir, so ../modules still resolves).
 # pull/refresh the thrive repo, then bring the stack up
 ExecStartPre=/usr/local/bin/thrive-bootstrap
-ExecStart=/usr/bin/docker compose up -d --build
-ExecStop=/usr/bin/docker compose down
+# docker.service goes "active" before the daemon socket actually accepts
+# connections on first boot — wait until `docker info` succeeds so compose
+# doesn't fail instantly with "cannot connect to the Docker daemon".
+ExecStartPre=/bin/sh -c 'for i in $(seq 1 60); do /usr/bin/docker info >/dev/null 2>&1 && exit 0; sleep 1; done; echo "docker daemon never became ready"; exit 1'
+ExecStart=/usr/bin/docker compose -f /opt/thrive/core/docker-compose.yml up -d --build
+ExecStop=/usr/bin/docker compose -f /opt/thrive/core/docker-compose.yml down
 TimeoutStartSec=0
 
 [Install]

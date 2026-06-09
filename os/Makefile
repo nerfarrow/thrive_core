@@ -17,7 +17,8 @@ image: builder          ## produce thriveos*.raw
 	# --package-cache-directory points the apt .deb cache at the host-mounted
 	# mkosi.cache/ (not mkosi's in-container default, which the --rm throws away),
 	# so re-builds reuse the ~1GB of packages instead of re-downloading them.
-	$(RUN) --package-cache-directory=/work/mkosi.cache build
+	# --force replaces a prior thriveos.raw (mkosi refuses to overwrite otherwise)
+	$(RUN) --package-cache-directory=/work/mkosi.cache --force build
 
 vm: builder             ## boot the built image in QEMU
 	docker run --rm -it --privileged $(KVM) -v $$PWD:/work -w /work $(BUILDER) vm
