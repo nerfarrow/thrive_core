@@ -62,7 +62,7 @@ services:
       - DOMAIN=https://thrive.nerfarrow.com/vault
       - ROCKET_PORT=8222
       - WEB_VAULT_ENABLED=true
-      - SIGNUPS_ALLOWED=true   # set false after you create your account
+      - SIGNUPS_ALLOWED=false  # locked down after accounts created; flip to true briefly to add people
     networks:
       - internal
 
