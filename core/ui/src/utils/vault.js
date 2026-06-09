@@ -92,6 +92,24 @@ export async function decryptEncString(encString, symKey) {
     return bytes ? new TextDecoder().decode(bytes) : null
 }
 
+// ── EncString encryption ────────────────────────────────────────────────────
+// Inverse of decryptEncString: UTF-8 string → type-2 EncString
+// ("2.{iv}|{ct}|{mac}"). AES-256-CBC with a fresh random IV, then HMAC-SHA-256
+// over iv ‖ ct — exactly what Bitwarden/Vaultwarden expects on write.
+export async function encryptEncString(plaintext, symKey) {
+    const iv = crypto.getRandomValues(new Uint8Array(16))
+    const aesKey = await crypto.subtle.importKey('raw', symKey.slice(0, 32), 'AES-CBC', false, ['encrypt'])
+    const ctBuf  = await crypto.subtle.encrypt({ name: 'AES-CBC', iv }, aesKey, new TextEncoder().encode(plaintext))
+    const ct = new Uint8Array(ctBuf)
+
+    const macKey = await crypto.subtle.importKey('raw', symKey.slice(32), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign'])
+    const toMac = new Uint8Array(iv.length + ct.length)
+    toMac.set(iv); toMac.set(ct, iv.length)
+    const mac = new Uint8Array(await crypto.subtle.sign('HMAC', macKey, toMac))
+
+    return `2.${bytesToB64(iv)}|${bytesToB64(ct)}|${bytesToB64(mac)}`
+}
+
 // ── localStorage helpers ──────────────────────────────────────────────────────
 
 export function loadVaultSymKey() {

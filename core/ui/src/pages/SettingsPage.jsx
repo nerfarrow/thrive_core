@@ -7,6 +7,7 @@ import { useAuth } from '../context/AuthContext'
 import { api } from '../api'
 import PlaidPanel from './PlaidPanel'
 import LMStudioPanel from './LMStudioPanel'
+import VaultPanel from '../components/VaultPanel'
 import EmojiPicker from '../components/EmojiPicker'
 
 const card = { background: 'var(--bg-secondary,#181818)', border: '1px solid var(--border-color,#2a2a2a)', borderRadius: 10, marginBottom: 16, overflow: 'hidden' }
@@ -366,12 +367,14 @@ export default function SettingsPage() {
   // Plaid ↔ Budget, AI host ↔ LM Studio.
   const [budgetEnabled,   setBudgetEnabled]   = useState(false)
   const [lmstudioEnabled, setLmstudioEnabled] = useState(false)
+  const [vaultEnabled,    setVaultEnabled]    = useState(false)
   useEffect(() => {
     api.get('/modules')
       .then(ms => {
         const on = id => { const m = ms.find(x => x.id === id); return !!(m && m.installed && m.enabled) }
         setBudgetEnabled(on('budget'))
         setLmstudioEnabled(on('lmstudio'))
+        setVaultEnabled(on('vault'))
       })
       .catch(() => {})
   }, [])
@@ -418,6 +421,13 @@ export default function SettingsPage() {
       {lmstudioEnabled && (
         <CollapsibleCard title="LM Studio" defaultOpen={false}>
           <LMStudioPanel />
+        </CollapsibleCard>
+      )}
+
+      {/* Vault — Vaultwarden connection, shown when the Vault module is enabled */}
+      {vaultEnabled && (
+        <CollapsibleCard title="Vault" defaultOpen={false}>
+          <VaultPanel />
         </CollapsibleCard>
       )}
 
