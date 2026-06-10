@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
-import { api } from '../api'
-import { useToast } from '../context/ToastContext'
-import { useConfirm } from '../context/ConfirmModal'
+import { api } from '@core/api'
+import { useToast } from '@core/context/ToastContext'
+import { useConfirm } from '@core/context/ConfirmModal'
 import './Page.css'
 
 export default function PayeesPage() {

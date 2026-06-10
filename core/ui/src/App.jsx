@@ -12,24 +12,16 @@ import { api } from './api'
 import LoginPage   from './components/LoginPage'
 import LandingPage from './pages/LandingPage'
 import SettingsPage from './pages/SettingsPage'
-import BudgetPage  from './pages/BudgetPage'
 
 // ── module registry (the seam) ──────────────────────────────────────────────
-// Module UIs are discovered at BUILD TIME by a Vite glob over
-// modules/<name>/ui/index.jsx — each default-exports its contract
-// { id, path, Page, Ambient? }. Core names no glob'd module at compile time and
-// compiles whatever module folders are physically present (none is fine). Routes
-// and the ambient map read from the merged list; nav is already dynamic via
-// GET /modules. The STATIC_MODULES below are pages not yet migrated into
-// modules/<name>/ui — they'll move over one at a time until this list is empty.
+// Module UIs are discovered ENTIRELY at build time: a Vite glob over
+// modules/<name>/ui/index.jsx, each default-exporting its contract
+// { id, path, Page, Ambient? }. Core names no module at compile time and
+// compiles whatever module folders are physically present — with none, the glob
+// is empty and core runs on its own. Routes + the ambient map read from here;
+// nav is already dynamic via GET /modules.
 const discovered = import.meta.glob('../../../modules/*/ui/index.jsx', { eager: true })
-const GLOB_MODULES = Object.values(discovered).map(m => m.default).filter(Boolean)
-
-const STATIC_MODULES = [
-  { id: 'budget',      path: '/budget/*',    Page: BudgetPage },
-]
-
-const MODULES = [...GLOB_MODULES, ...STATIC_MODULES]
+const MODULES = Object.values(discovered).map(m => m.default).filter(Boolean)
 
 // ── top nav ───────────────────────────────────────────────────────────────────
 // Custom nav icon order is persisted per-device (localStorage) — the icon
