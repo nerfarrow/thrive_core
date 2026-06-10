@@ -23,6 +23,24 @@ import GrovekeeperPage from './pages/GrovekeeperPage'
 import BlackHoleBackground from 'blackhole-lensing/react/BlackHoleBackground'
 import TreeBackground from 'grovekeeper/react/TreeBackground'
 
+// ── module registry (the seam) ──────────────────────────────────────────────
+// Every module's UI is declared here: its route, page component, and (optional)
+// ambient background renderer. This is the ONE place core names modules at
+// compile time — and the single seam that will later swap to build-time
+// discovery (a Vite glob over modules/<name>/ui), so core stops knowing module
+// names entirely. Nav is already dynamic (driven by GET /modules); routes and
+// the ambient map both read from here.
+const MODULES = [
+  { id: 'home',        path: '/home',        Page: HomePage },
+  { id: 'vehicles',    path: '/vehicles',    Page: VehiclesPage },
+  { id: 'budget',      path: '/budget/*',    Page: BudgetPage },
+  { id: 'vault',       path: '/vault',       Page: VaultPage },
+  { id: 'blackhole',   path: '/blackhole',   Page: BlackHolePage,   Ambient: BlackHoleBackground },
+  { id: 'grovekeeper', path: '/grovekeeper', Page: GrovekeeperPage, Ambient: TreeBackground },
+  { id: 'lmstudio',    path: '/lmstudio',    Page: LMStudioPage },
+  { id: 'users',       path: '/users',       Page: UsersPage },
+]
+
 // ── top nav ───────────────────────────────────────────────────────────────────
 // Custom nav icon order is persisted per-device (localStorage) — the icon
 // arrangement is a property of this screen/kiosk, not the account.
@@ -135,11 +153,11 @@ function TopNav() {
 // module is installed+enabled and you're not already on that module's own
 // (full-quality) page. Forced to cheap quality.
 const AMBIENT_KEY = 'thrive:ambient'
-// background renderers keyed by module id; add an entry to make a module ambient-capable
-const AMBIENTS = {
-  blackhole:   { path: '/blackhole',   Comp: BlackHoleBackground },
-  grovekeeper: { path: '/grovekeeper', Comp: TreeBackground },
-}
+// background renderers keyed by module id, derived from the registry: a module
+// becomes ambient-capable simply by declaring an `Ambient` component above
+const AMBIENTS = Object.fromEntries(
+  MODULES.filter(m => m.Ambient).map(m => [m.id, { path: m.path.replace('/*', ''), Comp: m.Ambient }])
+)
 function readAmbient() {
   try {
     const a = JSON.parse(localStorage.getItem(AMBIENT_KEY))
@@ -236,17 +254,14 @@ function Shell() {
       {!immersive && <TopNav />}
       <main style={{ marginTop: immersive ? 0 : 48, minHeight: immersive ? '100vh' : 'calc(100vh - 48px)' }}>
         <Routes>
-          <Route path="/"          element={<RootRoute />} />
-          <Route path="/home"      element={<HomePage />} />
-          <Route path="/vehicles"  element={<VehiclesPage />} />
-          <Route path="/budget/*"  element={<BudgetPage />} />
-          <Route path="/vault"     element={<VaultPage />} />
-          <Route path="/blackhole" element={<BlackHolePage />} />
-          <Route path="/grovekeeper" element={<GrovekeeperPage />} />
-          <Route path="/lmstudio"  element={<LMStudioPage />} />
-          <Route path="/users"     element={<UsersPage />} />
-          <Route path="/settings"  element={<SettingsPage />} />
-          <Route path="*"          element={<Navigate to="/" replace />} />
+          <Route path="/"         element={<RootRoute />} />
+          {/* module routes — emitted from the registry, not hardcoded */}
+          {MODULES.map(m => {
+            const Page = m.Page
+            return <Route key={m.id} path={m.path} element={<Page />} />
+          })}
+          <Route path="/settings" element={<SettingsPage />} />
+          <Route path="*"         element={<Navigate to="/" replace />} />
         </Routes>
       </main>
     </>
