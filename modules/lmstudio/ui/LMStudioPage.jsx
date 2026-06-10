@@ -116,6 +116,25 @@ function summarizeConfig(c) {
   return out.length ? out : ['defaults']
 }
 
+// collapse repeated identical configs (same settings tried many times → one row)
+function dedupeConfigs(rows) {
+  const seen = new Map()
+  for (const r of rows) { const sig = JSON.stringify(r.config || null); if (!seen.has(sig)) seen.set(sig, r) }
+  return [...seen.values()]
+}
+
+// the "how hard can we go" ceiling: the biggest context / GPU ratio that LOADED
+function ceiling(rows) {
+  let ctx = 0, gpu = 0
+  for (const r of rows) {
+    if (!r.ok) continue
+    const c = r.config || {}
+    if (c.context_length) ctx = Math.max(ctx, c.context_length)
+    if (c.gpu && c.gpu.ratio != null) gpu = Math.max(gpu, c.gpu.ratio)
+  }
+  return { ctx, gpu }
+}
+
 // "5m ago" from an SQLite UTC timestamp (datetime('now'))
 function ago(utc) {
   if (!utc) return ''
@@ -143,6 +162,8 @@ export default function LMStudioPage() {
   const [stats,    setStats]    = useState([])   // per-model vision-read scoreboard
   const [loadScores,setLoadScores] = useState([]) // per-model load success/fail
   const [loadLog,  setLoadLog]  = useState([])   // recent load attempts (config tried + outcome)
+  const [scoreOpen,setScoreOpen]= useState(null) // scoreboard model expanded to its good/bad settings
+  const [modelLog, setModelLog] = useState({})   // { model: full load log } — lazy-loaded on expand
   const [probing,  setProbing]  = useState(true)
   const [busy,     setBusy]     = useState({})   // model id → true while (un)loading on the host
   const [cfgFor,   setCfgFor]   = useState(null) // model id whose load-config strip is open
@@ -186,6 +207,18 @@ export default function LMStudioPage() {
     try { setLoadScores(await api.get('/lmstudio/load-stats')) } catch {}
   }, [])
 
+  // expand a scoreboard row → lazy-fetch that model's full load log (good/bad settings)
+  const toggleScore = async (model) => {
+    if (scoreOpen === model) { setScoreOpen(null); return }
+    setScoreOpen(model)
+    if (modelLog[model] === undefined) {
+      try {
+        const rows = await api.get(`/lmstudio/load-log?model=${encodeURIComponent(model)}&limit=100`)
+        setModelLog(m => ({ ...m, [model]: rows }))
+      } catch { setModelLog(m => ({ ...m, [model]: [] })) }
+    }
+  }
+
   useEffect(() => { loadStatus(); loadStats(); loadLoadLog(); loadLoadStats() },
     [loadStatus, loadStats, loadLoadLog, loadLoadStats])
 
@@ -211,7 +244,10 @@ export default function LMStudioPage() {
       showToast(e.message || 'Request failed', 'error')
     } finally {
       setBusy(b => { const n = { ...b }; delete n[m.id]; return n })
-      if (!loaded) { loadLoadLog(); loadLoadStats() }   // a load attempt (ok or fail) just logged a row
+      if (!loaded) {   // a load attempt (ok or fail) just logged a row
+        loadLoadLog(); loadLoadStats()
+        setModelLog(c => { const n = { ...c }; delete n[m.id]; return n })  // drop stale per-model log
+      }
     }
   }
 
@@ -563,16 +599,65 @@ export default function LMStudioPage() {
             </div>
             {scoreModels.map(model => {
               const r = statByModel[model], l = loadByModel[model]
+              const hasLoads = !!(l && l.total > 0)
+              const open = scoreOpen === model
               const tally = (t) => t && t.total > 0
                 ? <><span style={{ color: 'var(--color-success,#22c55e)' }}>✓{t.success}</span>{' '}<span style={{ color: 'var(--color-danger,#ef4444)' }}>✗{t.fail}</span></>
                 : <span style={{ color: 'var(--text-tertiary,#555)' }}>—</span>
               return (
-                <div key={model} style={{ display: 'grid', gridTemplateColumns: SCORE_COLS, gap: 6, padding: '6px 16px', fontSize: 11, alignItems: 'center', borderTop: '1px solid var(--border-color,#2a2a2a)' }}>
-                  <span style={{ fontFamily: 'monospace', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={model}>{model}</span>
-                  <span style={{ textAlign: 'right', fontSize: 10 }}>{tally(r)}</span>
-                  <span style={{ textAlign: 'right', color: 'var(--text-secondary,#aaa)' }}>{r && r.rate != null ? `${Math.round(r.rate * 100)}%` : '—'}</span>
-                  <span style={{ textAlign: 'right', fontSize: 10 }}>{tally(l)}</span>
-                </div>
+                <Fragment key={model}>
+                  <div onClick={hasLoads ? () => toggleScore(model) : undefined}
+                    style={{ display: 'grid', gridTemplateColumns: SCORE_COLS, gap: 6, padding: '6px 16px', fontSize: 11, alignItems: 'center',
+                      borderTop: '1px solid var(--border-color,#2a2a2a)', cursor: hasLoads ? 'pointer' : 'default',
+                      background: open ? 'var(--bg-tertiary,#1e1e1e)' : 'transparent' }}
+                    title={hasLoads ? 'Show which settings loaded vs failed' : undefined}>
+                    <span style={{ fontFamily: 'monospace', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={model}>
+                      {hasLoads && <span style={{ color: 'var(--text-tertiary,#666)', marginRight: 5, fontSize: 8 }}>{open ? '▾' : '▸'}</span>}
+                      {model}
+                    </span>
+                    <span style={{ textAlign: 'right', fontSize: 10 }}>{tally(r)}</span>
+                    <span style={{ textAlign: 'right', color: 'var(--text-secondary,#aaa)' }}>{r && r.rate != null ? `${Math.round(r.rate * 100)}%` : '—'}</span>
+                    <span style={{ textAlign: 'right', fontSize: 10 }}>{tally(l)}</span>
+                  </div>
+
+                  {/* good vs bad settings — how hard this model can go */}
+                  {open && (
+                    <div style={{ padding: '6px 16px 12px', background: 'var(--bg-tertiary,#1a1a1a)', borderTop: '1px solid var(--border-color,#1b1b1b)' }}>
+                      {modelLog[model] === undefined
+                        ? <div style={{ fontSize: 11, color: 'var(--text-tertiary,#666)' }}>Loading…</div>
+                        : (() => {
+                            const rows = modelLog[model] || []
+                            const good = dedupeConfigs(rows.filter(x => x.ok))
+                            const bad  = dedupeConfigs(rows.filter(x => !x.ok))
+                            const c = ceiling(rows)
+                            const chip = (t, i) => <span key={i} style={{ fontSize: 9, fontFamily: 'monospace', padding: '1px 6px', borderRadius: 4, background: 'var(--bg-secondary,#222)', color: 'var(--text-tertiary,#999)' }}>{t}</span>
+                            const line = (x, color) => (
+                              <div key={x.id} style={{ display: 'flex', gap: 4, flexWrap: 'wrap', alignItems: 'baseline', padding: '3px 0' }}>
+                                <span style={{ color, fontSize: 11, width: 12 }}>{x.ok ? '✓' : '✗'}</span>
+                                {summarizeConfig(x.config).map(chip)}
+                                {!x.ok && x.error && <span style={{ fontSize: 10, color: 'var(--color-danger,#ef4444)', opacity: 0.85 }} title={x.error}>— {x.error}</span>}
+                              </div>
+                            )
+                            return <>
+                              {(c.ctx > 0 || c.gpu > 0) && (
+                                <div style={{ fontSize: 11, fontFamily: 'monospace', color: 'var(--text-secondary,#aaa)', marginBottom: 6 }}>
+                                  ↑ pushes to {c.ctx ? `${fmtK(c.ctx)} ctx` : ''}{c.ctx && c.gpu ? ' · ' : ''}{c.gpu > 0 ? `${Math.round(c.gpu * 100)}% gpu` : ''}
+                                </div>
+                              )}
+                              {good.length > 0 && <>
+                                <div style={{ fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--color-success,#22c55e)', margin: '4px 0 2px' }}>Loaded — good settings</div>
+                                {good.map(x => line(x, 'var(--color-success,#22c55e)'))}
+                              </>}
+                              {bad.length > 0 && <>
+                                <div style={{ fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--color-danger,#ef4444)', margin: '8px 0 2px' }}>Failed — too far</div>
+                                {bad.map(x => line(x, 'var(--color-danger,#ef4444)'))}
+                              </>}
+                              {good.length === 0 && bad.length === 0 && <div style={{ fontSize: 11, color: 'var(--text-tertiary,#666)' }}>No load attempts recorded.</div>}
+                            </>
+                          })()}
+                    </div>
+                  )}
+                </Fragment>
               )
             })}
           </div>
