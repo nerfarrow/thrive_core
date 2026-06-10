@@ -5,7 +5,12 @@ name: thrive
 
 services:
   api:
-    build: ./api
+    # context is the REPO ROOT so the build installs each module's backend deps
+    # (modules/<name>/requirements.txt) alongside core's. Module code is still
+    # bind-mounted live below — only deps are baked at build.
+    build:
+      context: ..
+      dockerfile: core/api/Dockerfile
     container_name: thrive_api
     restart: unless-stopped
     volumes:

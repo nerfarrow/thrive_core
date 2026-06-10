@@ -1,0 +1,4 @@
+# lmstudio module backend deps (installed into the API image at build time)
+lmstudio>=1.5    # load/unload models over the host's websocket SDK channel
+httpx>=0.27      # model discovery + vision calls to the LM Studio host
+Pillow>=10.0     # image enhancement before OCR

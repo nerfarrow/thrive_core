@@ -1,0 +1,2 @@
+# budget/plaid module backend deps (installed into the API image at build time)
+requests>=2.31   # Plaid API calls (bank sync)
