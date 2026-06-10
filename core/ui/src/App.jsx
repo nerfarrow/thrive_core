@@ -14,10 +14,6 @@ import LandingPage from './pages/LandingPage'
 import SettingsPage from './pages/SettingsPage'
 import VehiclesPage from './pages/VehiclesPage'
 import BudgetPage  from './pages/BudgetPage'
-import BlackHolePage from './pages/BlackHolePage'
-import GrovekeeperPage from './pages/GrovekeeperPage'
-import BlackHoleBackground from 'blackhole-lensing/react/BlackHoleBackground'
-import TreeBackground from 'grovekeeper/react/TreeBackground'
 
 // ── module registry (the seam) ──────────────────────────────────────────────
 // Module UIs are discovered at BUILD TIME by a Vite glob over
@@ -33,8 +29,6 @@ const GLOB_MODULES = Object.values(discovered).map(m => m.default).filter(Boolea
 const STATIC_MODULES = [
   { id: 'vehicles',    path: '/vehicles',    Page: VehiclesPage },
   { id: 'budget',      path: '/budget/*',    Page: BudgetPage },
-  { id: 'blackhole',   path: '/blackhole',   Page: BlackHolePage,   Ambient: BlackHoleBackground },
-  { id: 'grovekeeper', path: '/grovekeeper', Page: GrovekeeperPage, Ambient: TreeBackground },
 ]
 
 const MODULES = [...GLOB_MODULES, ...STATIC_MODULES]
