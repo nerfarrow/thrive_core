@@ -1,0 +1,13 @@
+# /etc/pam.d/login — shipped via the overlay because Debian trixie's package
+# split left this conffile out of the minimal appliance image: the `login`
+# program is present (util-linux) but its PAM config wasn't pulled in, so login
+# fell through to pam.d/other (deny) and EVERY console login bounced regardless
+# of the password. Uses only PAM modules present in the image (no pam_lastlog /
+# pam_systemd, which this minimal image lacks).
+auth       requisite  pam_nologin.so
+@include common-auth
+@include common-account
+session    required   pam_loginuid.so
+session    optional   pam_env.so readenv=1
+@include common-session
+@include common-password
