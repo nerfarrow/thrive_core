@@ -6,7 +6,10 @@
 - `core/` — the platform shell: auth, a module loader, settings, landing page.
   Everything else is a module. `core/` is self-contained and runnable on its own.
 - `modules/` — the pluggable features (budget, vehicles, vault, home, users,
-  blackhole). Bind-mounted into the API container at runtime.
+  lmstudio, blackhole, grovekeeper). Each is **self-contained**: its own `ui/`
+  (React, discovered at build time), `api/` routers (bind-mounted, runtime-loaded),
+  and `requirements.txt` (backend deps). Core names no module at compile time, so
+  `core/` builds and runs with `modules/` empty.
 - `os/` — **thriveOS**, the appliance-image build (merged in from its own repo,
   history preserved). A reproducible amd64 Debian image, assembled declaratively
   with `mkosi`, that boots straight into thrive. Self-contained; builds in a
@@ -35,28 +38,36 @@ thrive/                         (git: nerfarrow/thrive)
 │   ├── .dockerignore
 │   ├── data/                   ← gitignored: thrive.db + vault/ (runtime)
 │   ├── blackhole-lensing/      ← shared WebGL lib (UI imports via Vite alias)
+│   ├── grovekeeper/            ← shared tree-renderer lib (Vite alias)
 │   ├── api/
-│   │   ├── Dockerfile
-│   │   ├── main.py             ← auth gate + module bootstrap + /modules API
+│   │   ├── Dockerfile          ← builds from REPO ROOT; installs core +
+│   │   │                          every modules/<name>/requirements.txt
+│   │   ├── main.py             ← auth gate + module bootstrap + /modules + /settings
 │   │   ├── modules.py          ← module discovery, loader, registry
-│   │   ├── requirements.txt
+│   │   ├── requirements.txt    ← CORE deps only (fastapi/uvicorn/python-multipart)
 │   │   └── routers/
 │   │       ├── auth.py         ← login/session/me/first-run + schema & migration
 │   │       └── accounts.py     ← admin account mgmt (creds, roles, link→profile)
 │   └── ui/
 │       ├── Dockerfile  index.html  nginx.conf  package.json  vite.config.js
+│       │                          (Dockerfile builds from the REPO ROOT so the
+│       │                           Vite glob can see modules/<name>/ui; @core
+│       │                           alias = core/ui/src)
 │       └── src/
 │           ├── App.jsx          ← auth gate (Gate), Shell (TopNav + routes)
+│           ├── moduleRegistry.js← build-time glob over modules/*/ui/index.jsx
 │           ├── api.js           ← fetch wrapper + 401 handling
 │           ├── index.css  main.jsx
-│           ├── context/  components/  pages/
-├── modules/                    pluggable features (all tracked in this repo today)
-│   ├── users/      ← household profiles (people, not logins)
-│   ├── home/       ← properties/home base
-│   ├── budget/     ← accounts, transactions, categories, payees, scheduled, plaid, reports
-│   ├── vehicles/   ← garage, MPG, oil/tires
-│   ├── vault/      ← Vaultwarden integration (served at /vault)
-│   └── blackhole/  ← black-hole renderer page + DB-backed presets
+│           ├── context/  components/  pages/ (= LandingPage + SettingsPage only)
+├── modules/                    pluggable features (monorepo — all tracked here)
+│   └── <name>/
+│       ├── module.json          ← manifest (id, nav_path, api_routers, …)
+│       ├── requirements.txt     ← module's own backend deps (baked at API build)
+│       ├── api/routers/*.py      ← runtime-loaded routers
+│       └── ui/index.jsx          ← exports { id, path, Page, Ambient?, settings? };
+│                                    co-locates its pages/components/utils/css,
+│                                    which import core via the @core alias
+│   (modules: users home budget vehicles vault lmstudio blackhole grovekeeper)
 └── os/                         thriveOS appliance image (mkosi; builds in Docker)
     ├── Makefile    ← make image / vm / vmdk / vdi  (host needs only Docker)
     ├── mkosi.conf  mkosi.extra/  mkosi.postinst   ← image definition + overlay
@@ -64,10 +75,14 @@ thrive/                         (git: nerfarrow/thrive)
     └── .gitignore  ← keeps build artifacts (*.raw/.vmdk/.initrd/…) out of git
 ```
 
-> **Note on module repos:** the design intent is that each module is its own repo
-> cloned into `modules/`. Today they're all **tracked in this one repo** (the
-> `.gitignore` un-ignores each `modules/<name>/`) — effectively a monorepo. Splitting
-> them back out waits on modules being able to ship their own React pages.
+> **Note on module distribution (decided 2026-06): the monorepo STAYS.** Modules are
+> NOT split into separate git repos — they're all tracked here for neatness, and modules
+> always depend on core (core never on a module). A module is already a self-contained,
+> packageable unit (ui + api + requirements + manifest). The *future* installer is
+> additive: build per-module **tarballs from this monorepo** + a catalog; "install
+> module X" on the host = download → unpack into `modules/` → install deps → rebuild UI
+> + restart API (the recompile runs on the thrive host). Nothing about that requires
+> splitting repos or rebuilding the module system — see the Module System section below.
 
 ## Architecture
 
@@ -79,9 +94,19 @@ thrive/                         (git: nerfarrow/thrive)
 - Cookie name: `thrive_session`
 - `COOKIE_SECURE=false` for local http dev, `true` for HTTPS production
 - Module loader: `core/api/modules.py` scans `/app/modules/` on startup
+- `core/api/requirements.txt` is **core deps only**; each module declares its own
+  `modules/<name>/requirements.txt`, installed into the API image at build (the API
+  Dockerfile builds from the repo root). Module ROUTER code is bind-mounted live, but
+  module DEPS are baked → adding a dep needs an API `--build`
 
 ### Frontend
 - React + Vite, no component library — inline styles using CSS vars
+- **Module UIs are build-time discovered**, not imported by core. `core/ui/src/
+  moduleRegistry.js` runs a Vite glob over `modules/*/ui/index.jsx`; each
+  default-exports `{ id, path, Page, Ambient?, settings? }`. `App.jsx` reads it for
+  routes + ambient, `SettingsPage` for module settings panels. Empty `modules/` →
+  empty registry → core runs alone. Module UI imports core via the **`@core`** alias
+  (`@core/api`, `@core/context/*`, `@core/components/*`, `@core/utils/vault`).
 - Dark mono aesthetic (Space Mono + DM Sans fonts)
 - CSS vars: `--bg-primary #0f0f0f`, `--bg-secondary #181818`, `--bg-tertiary #222`
 - `--text-primary #e8e6e0`, `--text-secondary #aaa`, `--text-tertiary #666`
@@ -93,7 +118,12 @@ thrive/                         (git: nerfarrow/thrive)
 ### Deploy
 - Docker Compose, port 9500, project name `thrive` (containers `thrive_api/ui/vault`)
 - UI container: nginx serving the Vite build, proxies `/api/` to `thrive_api:8000`
-- `../modules` bind-mounted into the API container — no rebuild to add/edit a module
+- **Both `ui` and `api` build with `context: ..` (repo root)** so the build can see
+  `modules/` (UI glob; API per-module deps). UI Dockerfile mirrors the repo layout
+  and hoists `node_modules` via a repo-root symlink so out-of-tree module imports
+  resolve; there's a repo-root `.dockerignore`.
+- `../modules` is still bind-mounted into the API container — editing a router needs
+  only `docker compose restart api`; UI changes or a new module dep need `--build`
 
 ## Module System
 
@@ -109,6 +139,9 @@ thrive/                         (git: nerfarrow/thrive)
 5. Landing page shows active module cards; top bar shows active module nav icons
 6. Module icon/color can be overridden in Settings (`icon_override`/`color_override`);
    sync from `module.json` never clobbers overrides; `GET /modules` returns effective values
+7. **Frontend pieces are build-time discovered** (`core/ui/src/moduleRegistry.js`),
+   then gated on the active set: a module's page/route, ambient renderer, and Settings
+   panel render only when it's `installed && enabled`. Core imports no module.
 
 **Router loading note:** every module declares routers under the same dotted path
 (`api.routers.<name>`), so the loader does NOT use `importlib.import_module` (that
@@ -137,6 +170,19 @@ maps the dotted path to `<module>/api/routers/<name>.py` and loads it via
 ```
 Optional `"core": true` marks a module the platform refuses to disable (Settings
 shows a 🔒). No module is currently core.
+
+### Module anatomy (each module is self-contained)
+- `module.json` — the manifest above (backend identity + router list)
+- `api/routers/*.py` — runtime-loaded routers (no `__init__.py` needed)
+- `ui/index.jsx` — default-exports `{ id, path, Page, Ambient?, settings? }`
+  (`settings = { title, Panel, defaultOpen?, padded? }`), co-locating the module's
+  own `pages/ components/ utils/` + CSS; all import core via the `@core` alias
+- `requirements.txt` — the module's backend Python deps (baked into the API image)
+
+**Cross-module ties feature-detect, never hard-`requires`.** e.g. vehicles/MPG uses
+the lmstudio module's `/lmstudio/vision` when present and falls back to manual entry
+when it isn't; budget's Accounts shows vault linking only when a vault session exists.
+`requires` is reserved for true hard deps (none today).
 
 ### Account vs user/profile
 - An **account** (`accounts` table) is a login credential (username/password/role).
@@ -175,19 +221,31 @@ lives in **core**; the **users module** owns only profiles.
 ## Running locally
 ```bash
 cd ~/thrive/core
-docker compose up -d --build   # full rebuild
-docker compose restart api     # restart API only (e.g. after adding a module)
+docker compose up -d --build   # full rebuild (needed for UI changes / new modules / new deps)
+docker compose restart api     # restart API only — enough for a ROUTER code edit
 docker compose logs api        # check module discovery output
 ```
-Install a module: drop it in `~/thrive/modules/<name>/` then `docker compose restart api`.
-Access at http://<nerfBase-ip>:9500
+Add a module: drop it in `~/thrive/modules/<name>/` then `docker compose up -d --build`
+(its UI is build-time discovered and its deps are baked — a bare `restart api` won't
+pick those up). Access at http://<nerfBase-ip>:9500. NOTE: nerfBase has no staging —
+a rebuild here deploys live to thrive.nerfarrow.com.
 
 ## What's next
-- [ ] UI "install module" flow (currently: drop into modules/ + restart api)
-- [ ] Module UI pages (each module ships its own React pages) — prereq for
-      splitting modules back into their own repos
-- [ ] Install-time module selection
+- [ ] **Installer / catalog** — UI to install modules from a catalog. Needs a
+      host-orchestration decision first (the containerized app can't rebuild its own
+      image): mounted docker socket vs a host-side agent vs "write to `modules/` +
+      prompt the user to rebuild". Then: download tarball → unpack → install deps →
+      rebuild UI + restart API. (Activation flags + `GET /modules` already exist.)
+- [ ] **Per-module tarball packaging** — CI builds a tarball per module from this
+      monorepo + a catalog manifest (the source the installer pulls from).
+- [ ] **Theming** — swappable look via CSS-var palettes; current look becomes
+      "Thrive Classic"; total coverage (charts/accents too); one global default via
+      `/settings`. Designed + scoped, not yet built.
 - [ ] Profile-picker (kiosk) login
+
+**Recently done (2026-06-09):** module-UI build-time discovery + settings-panel
+discovery (modules fully own their UI; core names none), and per-module backend
+`requirements.txt` (core deps slimmed to core-only).
 
 ## Owner
 nerfarrow — home server: nerfBase (Ubuntu)
