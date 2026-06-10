@@ -276,6 +276,7 @@ export default function MPGPage({ showToast, showConfirm }) {
   const [visionModels, setVisionModels] = useState([]);
   const [activeModel,  setActiveModel]  = useState("");
   const [modelHost,    setModelHost]    = useState("");
+  const [modelLoading, setModelLoading] = useState(false);  // loading a model on the host
   const [modelStats,   setModelStats]   = useState({});  // { [model]: {success, fail, total, rate} }
   const [entryImages,  setEntryImages]  = useState({});  // { [entryId]: [{kind, b64}] } — lazy-loaded on expand
 
@@ -344,6 +345,39 @@ export default function MPGPage({ showToast, showConfirm }) {
   }, []);
   useEffect(() => { loadModels(); }, [loadModels]);
 
+  // Make a model resident on the host. No-op if it's already loaded; otherwise
+  // loads it via the LM Studio module (now that /lmstudio/load exists) and
+  // re-probes so the ● loaded marker updates. Big models take a few seconds.
+  const ensureLoaded = useCallback(async (id, models) => {
+    const m = (models || visionModels).find(v => v.id === id);
+    if (!id || !m || m.state === "loaded") return;
+    setModelLoading(true);
+    try {
+      const r = await fetch(LM + "/load", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ model: id, type: m.type }),
+      });
+      if (!r.ok) { let t = await r.text(); try { t = JSON.parse(t).detail || t; } catch {} throw new Error((t || "").slice(0, 160)); }
+      showToast?.(`Loaded ${id}`, "success");
+      await loadModels();
+    } catch (e) {
+      showToast?.(`Couldn't load model: ${e.message}`, "error");
+    } finally {
+      setModelLoading(false);
+    }
+  }, [visionModels, loadModels, showToast]);
+
+  // On arrival, if LM Studio is connected with a chosen model but nothing is
+  // loaded yet, warm up the default so OCR is ready without a manual step.
+  const autoWarmed = useRef(false);
+  useEffect(() => {
+    if (autoWarmed.current || modelLoading) return;
+    if (visionModels.length === 0 || !activeModel) return;
+    if (visionModels.some(m => m.state === "loaded")) { autoWarmed.current = true; return; }
+    autoWarmed.current = true;
+    ensureLoaded(activeModel, visionModels);
+  }, [visionModels, activeModel, modelLoading, ensureLoaded]);
+
   const loadModelStats = useCallback(async () => {
     try {
       const r = await fetch(LM + "/model-stats");
@@ -366,6 +400,7 @@ export default function MPGPage({ showToast, showConfirm }) {
   const selectModel = async (id) => {
     setActiveModel(id);
     try { await fetch(LM + "/config", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ key: "vision_model", value: id }) }); } catch {}
+    if (id) ensureLoaded(id, visionModels);   // load it on the host if it isn't already
   };
 
   const pickPhoto = async (zone, file) => {
@@ -648,6 +683,12 @@ export default function MPGPage({ showToast, showConfirm }) {
     finally { setSavingEdit(false); }
   };
 
+  // LM Studio is an OPTIONAL capability, not a requirement: vision models only
+  // appear when the module is installed/enabled and its host advertises a VLM.
+  // When it's absent the whole photo/OCR path is hidden and MPG is plain manual
+  // entry — no nag, no broken buttons.
+  const visionReady = visionModels.length > 0;
+
   const avg        = stats.avg_mpg;
   const mpgEntries = entries.filter(e => e.mpg != null);
   const avgRecent  = mpgEntries.slice(-3).reduce((a, b) => a + b.mpg, 0) / (mpgEntries.slice(-3).length || 1);
@@ -693,7 +734,7 @@ export default function MPGPage({ showToast, showConfirm }) {
         <div style={{ marginBottom: "1.5rem", display: "flex", alignItems: "flex-end", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
           <div>
             <h1 style={{ fontSize: 14, fontWeight: 500, letterSpacing: "0.15em", textTransform: "uppercase", margin: 0 }}>MPG Tracker</h1>
-            <p style={{ fontSize: 12, color: "var(--text-tertiary,#888)", marginTop: 4 }}>Vision-powered fuel log</p>
+            <p style={{ fontSize: 12, color: "var(--text-tertiary,#888)", marginTop: 4 }}>{visionReady ? "Vision-powered fuel log" : "Fuel log"}</p>
           </div>
           {/* vehicle filter pill */}
           {vehicles.length > 0 && (
@@ -743,35 +784,37 @@ export default function MPGPage({ showToast, showConfirm }) {
                 </div>
               )}
 
-              {/* vision model selector */}
-              <div style={{ marginBottom: 14 }}>
-                <label style={{ ...labelStyle, display: "block", marginBottom: 4 }}>
-                  Vision model {modelHost && <span style={{ opacity: 0.6 }}>· {modelHost}</span>}
-                </label>
-                {visionModels.length === 0 ? (
-                  <div style={{ fontSize: 11, color: "#f59e0b" }}>No vision models found. Check the LM Studio module in Settings.</div>
-                ) : (
-                  <select value={activeModel} onChange={e => selectModel(e.target.value)} style={{ ...inputStyle, fontSize: 12 }}>
-                    <option value="">— pick a model —</option>
-                    {visionModels.map(m => {
-                      const s = modelStats[m.id];
-                      const tag = s && s.total ? `  ✓${s.success} ✗${s.fail}` : "";
-                      return <option key={m.id} value={m.id}>{m.id}{m.state === "loaded" ? " ●" : ""}{tag}</option>;
-                    })}
-                  </select>
-                )}
-                {/* track record for the selected model */}
-                {activeModel && modelStats[activeModel]?.total > 0 && (
-                  <div style={{ fontSize: 10, color: "var(--text-tertiary,#888)", marginTop: 5, display: "flex", gap: 10, flexWrap: "wrap" }}>
-                    <span style={{ color: "var(--color-success,#22c55e)" }}>✓ {modelStats[activeModel].success}</span>
-                    <span style={{ color: "var(--color-danger,#ef4444)" }}>✗ {modelStats[activeModel].fail}</span>
-                    {modelStats[activeModel].rate != null && <span>{Math.round(modelStats[activeModel].rate * 100)}% success</span>}
+              {/* vision capture — only when LM Studio is available; otherwise the
+                  form below is plain manual entry */}
+              {visionReady && (
+                <>
+                  <div style={{ marginBottom: 14 }}>
+                    <label style={{ ...labelStyle, display: "block", marginBottom: 4 }}>
+                      Vision model {modelHost && <span style={{ opacity: 0.6 }}>· {modelHost}</span>}
+                      {modelLoading && <span style={{ opacity: 0.8, marginLeft: 6, color: "#f59e0b" }}>· loading…</span>}
+                    </label>
+                    <select value={activeModel} onChange={e => selectModel(e.target.value)} disabled={modelLoading} style={{ ...inputStyle, fontSize: 12, opacity: modelLoading ? 0.6 : 1 }}>
+                      <option value="">— pick a model —</option>
+                      {visionModels.map(m => {
+                        const s = modelStats[m.id];
+                        const tag = s && s.total ? `  ✓${s.success} ✗${s.fail}` : "";
+                        return <option key={m.id} value={m.id}>{m.id}{m.state === "loaded" ? " ●" : ""}{tag}</option>;
+                      })}
+                    </select>
+                    {/* track record for the selected model */}
+                    {activeModel && modelStats[activeModel]?.total > 0 && (
+                      <div style={{ fontSize: 10, color: "var(--text-tertiary,#888)", marginTop: 5, display: "flex", gap: 10, flexWrap: "wrap" }}>
+                        <span style={{ color: "var(--color-success,#22c55e)" }}>✓ {modelStats[activeModel].success}</span>
+                        <span style={{ color: "var(--color-danger,#ef4444)" }}>✗ {modelStats[activeModel].fail}</span>
+                        {modelStats[activeModel].rate != null && <span>{Math.round(modelStats[activeModel].rate * 100)}% success</span>}
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
 
-              <PhotoButton label="Odometer photo" hint="Dashboard mileage" thumb={odoThumb} busy={odoBusy} status={odoStatus} statusType={odoType} onPick={f => pickPhoto("odometer", f)} canRetry={!!odoB64} onRetry={() => retryExtract("odometer")} />
-              <PhotoButton label="Pump photo" hint="Sale total, then gallons" thumb={pumpThumb} busy={pumpBusy} status={pumpStatus} statusType={pumpType} onPick={f => pickPhoto("pump", f)} canRetry={!!(pumpSaleB64 || pumpGallonsB64)} onRetry={() => retryExtract("pump")} />
+                  <PhotoButton label="Odometer photo" hint="Dashboard mileage" thumb={odoThumb} busy={odoBusy} status={odoStatus} statusType={odoType} onPick={f => pickPhoto("odometer", f)} canRetry={!!odoB64} onRetry={() => retryExtract("odometer")} />
+                  <PhotoButton label="Pump photo" hint="Sale total, then gallons" thumb={pumpThumb} busy={pumpBusy} status={pumpStatus} statusType={pumpType} onPick={f => pickPhoto("pump", f)} canRetry={!!(pumpSaleB64 || pumpGallonsB64)} onRetry={() => retryExtract("pump")} />
+                </>
+              )}
 
               {[
                 { id: "odometer", label: "Odometer (mi)",              type: "number", step: "1",     placeholder: "56197"  },
