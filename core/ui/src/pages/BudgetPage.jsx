@@ -16,6 +16,7 @@ import CategoriesPage   from './CategoriesPage'
 import PayeesPage       from './PayeesPage'
 import ScheduledPage    from './ScheduledPage'
 import CategoryBreakdown from './CategoryBreakdown'
+import CashFlowTrend     from './CashFlowTrend'
 
 // budget stylesheets (monolith CSS + var aliases). budget-theme.css must load
 // first so the aliased variables are defined before the rest reference them.
@@ -70,6 +71,8 @@ function BudgetSidebar({ refreshKey }) {
           <div className="nav-section">
             <button className={`nav-item ${path === '/budget/reports' ? 'active' : ''}`}
               onClick={() => navigate('/budget/reports')}>Category Breakdown</button>
+            <button className={`nav-item ${path === '/budget/reports/cash-flow' ? 'active' : ''}`}
+              onClick={() => navigate('/budget/reports/cash-flow')}>Cash Flow</button>
           </div>
         </div>
       </div>
@@ -143,6 +146,7 @@ export default function BudgetPage() {
           <Route path="payees"     element={<PayeesPage />} />
           <Route path="scheduled"  element={<ScheduledPage />} />
           <Route path="reports"    element={<CategoryBreakdown />} />
+          <Route path="reports/cash-flow" element={<CashFlowTrend />} />
           <Route path="*"          element={<Navigate to="accounts" replace />} />
         </Routes>
       </div>

@@ -5,6 +5,7 @@
 from fastapi import APIRouter, Query
 from typing import Optional
 from datetime import date, timedelta
+import calendar
 
 from routers.auth import get_db   # platform connection (returns a conn to close)
 
@@ -18,6 +19,24 @@ def resolve_range(range_type: str, from_date: Optional[str], to_date: Optional[s
     if range_type == "custom" and from_date and to_date:
         return from_date, to_date
     return (today - timedelta(days=30)).isoformat(), today.isoformat()
+
+
+def add_months(d: date, n: int) -> date:
+    """First-of-month date n months from d (n may be negative)."""
+    total = d.year * 12 + (d.month - 1) + n
+    y, m = divmod(total, 12)
+    return date(y, m + 1, 1)
+
+
+def month_seq(d_from: str, d_to: str) -> list:
+    """Every 'YYYY-MM' key from d_from..d_to inclusive — used to zero-fill gaps."""
+    cur = date.fromisoformat(d_from).replace(day=1)
+    end = date.fromisoformat(d_to).replace(day=1)
+    out = []
+    while cur <= end:
+        out.append(cur.strftime("%Y-%m"))
+        cur = add_months(cur, 1)
+    return out
 
 
 def build_breakdown(rows: list, sign: int) -> list:
@@ -137,4 +156,147 @@ def category_breakdown(
         "to_date":   d_to,
         "expenses": {"total_cents": sum(c["total_cents"] for c in expenses), "categories": expenses},
         "income":   {"total_cents": sum(c["total_cents"] for c in income),   "categories": income},
+    }
+
+
+@router.get("/cash-flow")
+def cash_flow(
+    months:    int           = Query(12, ge=1, le=120),  # trailing window when no custom range
+    from_date: Optional[str] = Query(None, alias="from"),
+    to_date:   Optional[str] = Query(None, alias="to"),
+):
+    """Monthly income / expense / net over a span (default: the trailing `months`).
+    Transfers are excluded; income is the sum of positive amounts, expense the
+    magnitude of negatives, net = income − expense. Months with no activity come
+    back as zeros so the series is continuous for charting."""
+    today = date.today()
+    if from_date and to_date:
+        d_from, d_to = from_date, to_date
+    else:
+        d_from = add_months(today.replace(day=1), -(months - 1)).isoformat()
+        d_to   = today.isoformat()
+
+    conn = get_db()
+    try:
+        rows = conn.execute("""
+            SELECT strftime('%Y-%m', t.date) AS ym,
+                   SUM(CASE WHEN t.amount_cents > 0 THEN  t.amount_cents ELSE 0 END) AS income_cents,
+                   SUM(CASE WHEN t.amount_cents < 0 THEN -t.amount_cents ELSE 0 END) AS expense_cents
+            FROM transactions t
+            WHERE t.date >= ? AND t.date <= ? AND t.transfer_account_id IS NULL
+            GROUP BY ym
+        """, (d_from, d_to)).fetchall()
+    finally:
+        conn.close()
+
+    by_month = {r["ym"]: r for r in rows}
+    series = []
+    for ym in month_seq(d_from, d_to):
+        r   = by_month.get(ym)
+        inc = r["income_cents"]  if r else 0
+        exp = r["expense_cents"] if r else 0
+        series.append({"month": ym, "income_cents": inc, "expense_cents": exp, "net_cents": inc - exp})
+
+    return {
+        "from_date": d_from,
+        "to_date":   d_to,
+        "months":    series,
+        "totals": {
+            "income_cents":  sum(m["income_cents"]  for m in series),
+            "expense_cents": sum(m["expense_cents"] for m in series),
+            "net_cents":     sum(m["net_cents"]     for m in series),
+        },
+    }
+
+
+def _clamp_dom(y: int, m: int, day: int) -> date:
+    """A day-of-month occurrence, clamped to the month's real length (e.g. a 31st
+    rule lands on Feb 28/29)."""
+    return date(y, m, min(day, calendar.monthrange(y, m)[1]))
+
+
+def _add_year(d: date) -> date:
+    try:
+        return d.replace(year=d.year + 1)
+    except ValueError:           # Feb 29 → Feb 28 on non-leap years
+        return d.replace(year=d.year + 1, day=28)
+
+
+def _occurrences(freq: str, day, anchor, win_from: date, win_to: date) -> list:
+    """Concrete occurrence dates of one recurring rule within [win_from, win_to]."""
+    occ = []
+    if freq in ("monthly", "quarterly"):
+        if day is None:
+            return occ
+        step = 1 if freq == "monthly" else 3      # quarterly: phase off the window start
+        cur = win_from.replace(day=1)
+        while cur <= win_to:
+            d = _clamp_dom(cur.year, cur.month, int(day))
+            if win_from <= d <= win_to:
+                occ.append(d)
+            cur = add_months(cur, step)
+        return occ
+
+    if not anchor:
+        return occ
+    d = date.fromisoformat(anchor)
+
+    if freq == "yearly":
+        while d < win_from:
+            d = _add_year(d)
+        while d <= win_to:
+            occ.append(d); d = _add_year(d)
+        return occ
+
+    delta = timedelta(days=7 if freq == "weekly" else 14)   # weekly / biweekly
+    if d < win_from:                                         # fast-forward whole periods
+        d += delta * ((win_from - d).days // delta.days)
+        while d < win_from:
+            d += delta
+    while d <= win_to:
+        occ.append(d); d += delta
+    return occ
+
+
+@router.get("/cash-flow-projection")
+def cash_flow_projection(months: int = Query(3, ge=1, le=24)):
+    """Projected monthly income / expense / net for the next `months` months,
+    derived purely from scheduled (recurring) transactions — each rule expanded
+    into concrete occurrences. Transfers excluded. Starts the month AFTER the
+    current one, so it continues cleanly past the actuals in /cash-flow."""
+    first   = add_months(date.today().replace(day=1), 1)
+    win_to  = add_months(first, months) - timedelta(days=1)   # last day of the final month
+
+    conn = get_db()
+    try:
+        rows = conn.execute("""
+            SELECT amount_cents, frequency, day, anchor_date
+            FROM scheduled
+            WHERE transfer_account_id IS NULL
+        """).fetchall()
+    finally:
+        conn.close()
+
+    buckets = {ym: {"income_cents": 0, "expense_cents": 0} for ym in month_seq(first.isoformat(), win_to.isoformat())}
+    for s in rows:
+        for d in _occurrences(s["frequency"], s["day"], s["anchor_date"], first, win_to):
+            b = buckets[d.strftime("%Y-%m")]
+            cents = s["amount_cents"]
+            if cents > 0: b["income_cents"]  += cents
+            else:         b["expense_cents"] += -cents
+
+    series = [
+        {"month": ym, "income_cents": b["income_cents"], "expense_cents": b["expense_cents"],
+         "net_cents": b["income_cents"] - b["expense_cents"], "projected": True}
+        for ym, b in buckets.items()
+    ]
+    return {
+        "from_date": first.isoformat(),
+        "to_date":   win_to.isoformat(),
+        "months":    series,
+        "totals": {
+            "income_cents":  sum(m["income_cents"]  for m in series),
+            "expense_cents": sum(m["expense_cents"] for m in series),
+            "net_cents":     sum(m["net_cents"]     for m in series),
+        },
     }
