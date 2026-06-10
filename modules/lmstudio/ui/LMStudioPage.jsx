@@ -50,6 +50,8 @@ const paramsNum = (p) => {
 // model-table column layout, shared by the header row and every body row
 // (last col is the load/unload action button)
 const MODEL_COLS = '14px 56px minmax(0,1fr) 58px 118px 74px 60px 30px'
+// scoreboard column layout (Model · vision Reads · Rate · Loads)
+const SCORE_COLS = '1fr 70px 48px 70px'
 
 // ── load-config form ──────────────────────────────────────────────────────────
 // blank '' (or gpu_auto) means "leave at the host default". Booleans are tri-state
@@ -138,7 +140,8 @@ export default function LMStudioPage() {
   const [online,   setOnline]   = useState(false)
   const [models,   setModels]   = useState([])
   const [visModel, setVisModel] = useState('')   // configured default
-  const [stats,    setStats]    = useState([])
+  const [stats,    setStats]    = useState([])   // per-model vision-read scoreboard
+  const [loadScores,setLoadScores] = useState([]) // per-model load success/fail
   const [loadLog,  setLoadLog]  = useState([])   // recent load attempts (config tried + outcome)
   const [probing,  setProbing]  = useState(true)
   const [busy,     setBusy]     = useState({})   // model id → true while (un)loading on the host
@@ -179,7 +182,12 @@ export default function LMStudioPage() {
     try { setLoadLog(await api.get('/lmstudio/load-log?limit=30')) } catch {}
   }, [])
 
-  useEffect(() => { loadStatus(); loadStats(); loadLoadLog() }, [loadStatus, loadStats, loadLoadLog])
+  const loadLoadStats = useCallback(async () => {
+    try { setLoadScores(await api.get('/lmstudio/load-stats')) } catch {}
+  }, [])
+
+  useEffect(() => { loadStatus(); loadStats(); loadLoadLog(); loadLoadStats() },
+    [loadStatus, loadStats, loadLoadLog, loadLoadStats])
 
   // open the load-config strip under a model, seeding the form from its defaults
   const openCfg = (m) => { setCfg(blankCfg(m)); setCfgAdv(false); setCfgFor(m.id) }
@@ -203,7 +211,7 @@ export default function LMStudioPage() {
       showToast(e.message || 'Request failed', 'error')
     } finally {
       setBusy(b => { const n = { ...b }; delete n[m.id]; return n })
-      if (!loaded) loadLoadLog()   // a load attempt (ok or fail) just logged a row
+      if (!loaded) { loadLoadLog(); loadLoadStats() }   // a load attempt (ok or fail) just logged a row
     }
   }
 
@@ -253,6 +261,10 @@ export default function LMStudioPage() {
 
   const visionModels = models.filter(m => m.vision)
   const statByModel  = Object.fromEntries(stats.map(s => [s.model, s]))
+  // scoreboard merges two per-model tallies: vision reads + load attempts. Union
+  // the models from both (a model may have loads but no reads, or vice versa).
+  const loadByModel  = Object.fromEntries(loadScores.map(s => [s.model, s]))
+  const scoreModels  = [...new Set([...stats.map(s => s.model), ...loadScores.map(s => s.model)])].sort()
 
   // sortable model table: click a header to sort by it, again to flip direction
   const sortVal = {
@@ -538,22 +550,31 @@ export default function LMStudioPage() {
         </div>
       </div>
 
-      {/* ── scoreboard ── */}
-      {stats.length > 0 && (
+      {/* ── scoreboard ── per-model vision reads + load success/fail ── */}
+      {scoreModels.length > 0 && (
         <div style={card}>
-          <div style={head}>Extraction scoreboard</div>
+          <div style={head}>Model scoreboard</div>
           <div style={{ padding: '4px 0' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 52px 52px 60px', gap: 6, padding: '6px 16px', fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-tertiary,#666)' }}>
-              <span>Model</span><span style={{ textAlign: 'right' }}>✓</span><span style={{ textAlign: 'right' }}>✗</span><span style={{ textAlign: 'right' }}>Rate</span>
+            <div style={{ display: 'grid', gridTemplateColumns: SCORE_COLS, gap: 6, padding: '6px 16px', fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-tertiary,#666)' }}>
+              <span>Model</span>
+              <span style={{ textAlign: 'right' }} title="Vision reads kept ✓ / missed ✗">Reads</span>
+              <span style={{ textAlign: 'right' }} title="Vision read success rate">Rate</span>
+              <span style={{ textAlign: 'right' }} title="Load attempts ok ✓ / failed ✗">Loads</span>
             </div>
-            {stats.map(s => (
-              <div key={s.model} style={{ display: 'grid', gridTemplateColumns: '1fr 52px 52px 60px', gap: 6, padding: '6px 16px', fontSize: 11, alignItems: 'center', borderTop: '1px solid var(--border-color,#2a2a2a)' }}>
-                <span style={{ fontFamily: 'monospace', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={s.model}>{s.model}</span>
-                <span style={{ textAlign: 'right', color: 'var(--color-success,#22c55e)' }}>{s.success}</span>
-                <span style={{ textAlign: 'right', color: 'var(--color-danger,#ef4444)' }}>{s.fail}</span>
-                <span style={{ textAlign: 'right', color: 'var(--text-secondary,#aaa)' }}>{s.rate != null ? `${Math.round(s.rate * 100)}%` : '—'}</span>
-              </div>
-            ))}
+            {scoreModels.map(model => {
+              const r = statByModel[model], l = loadByModel[model]
+              const tally = (t) => t && t.total > 0
+                ? <><span style={{ color: 'var(--color-success,#22c55e)' }}>✓{t.success}</span>{' '}<span style={{ color: 'var(--color-danger,#ef4444)' }}>✗{t.fail}</span></>
+                : <span style={{ color: 'var(--text-tertiary,#555)' }}>—</span>
+              return (
+                <div key={model} style={{ display: 'grid', gridTemplateColumns: SCORE_COLS, gap: 6, padding: '6px 16px', fontSize: 11, alignItems: 'center', borderTop: '1px solid var(--border-color,#2a2a2a)' }}>
+                  <span style={{ fontFamily: 'monospace', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={model}>{model}</span>
+                  <span style={{ textAlign: 'right', fontSize: 10 }}>{tally(r)}</span>
+                  <span style={{ textAlign: 'right', color: 'var(--text-secondary,#aaa)' }}>{r && r.rate != null ? `${Math.round(r.rate * 100)}%` : '—'}</span>
+                  <span style={{ textAlign: 'right', fontSize: 10 }}>{tally(l)}</span>
+                </div>
+              )
+            })}
           </div>
         </div>
       )}

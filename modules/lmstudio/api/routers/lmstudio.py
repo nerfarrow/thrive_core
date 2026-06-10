@@ -349,6 +349,26 @@ def load_log(model: Optional[str] = None, limit: int = 50):
     return out
 
 
+@router.get("/load-stats")
+def load_stats():
+    """Per-model load scoreboard: how many load attempts succeeded vs failed."""
+    conn = get_db()
+    try:
+        rows = conn.execute("""
+            SELECT model,
+                   COALESCE(SUM(ok), 0)     AS success,
+                   COALESCE(SUM(1 - ok), 0) AS fail,
+                   COUNT(*)                 AS total,
+                   MAX(created_at)          AS last_used
+            FROM lmstudio_load_log
+            GROUP BY model
+            ORDER BY model
+        """).fetchall()
+    finally:
+        conn.close()
+    return [dict(r) for r in rows]
+
+
 @router.post("/unload")
 async def unload_model(req: UnloadRequest):
     """Unload a model from the host, freeing its memory."""
