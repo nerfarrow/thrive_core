@@ -12,12 +12,9 @@ import { api } from './api'
 import LoginPage   from './components/LoginPage'
 import LandingPage from './pages/LandingPage'
 import SettingsPage from './pages/SettingsPage'
-import UsersPage   from './pages/UsersPage'
 import VehiclesPage from './pages/VehiclesPage'
 import BudgetPage  from './pages/BudgetPage'
-import VaultPage   from './pages/VaultPage'
 import BlackHolePage from './pages/BlackHolePage'
-import LMStudioPage from './pages/LMStudioPage'
 import GrovekeeperPage from './pages/GrovekeeperPage'
 import BlackHoleBackground from 'blackhole-lensing/react/BlackHoleBackground'
 import TreeBackground from 'grovekeeper/react/TreeBackground'
@@ -36,11 +33,8 @@ const GLOB_MODULES = Object.values(discovered).map(m => m.default).filter(Boolea
 const STATIC_MODULES = [
   { id: 'vehicles',    path: '/vehicles',    Page: VehiclesPage },
   { id: 'budget',      path: '/budget/*',    Page: BudgetPage },
-  { id: 'vault',       path: '/vault',       Page: VaultPage },
   { id: 'blackhole',   path: '/blackhole',   Page: BlackHolePage,   Ambient: BlackHoleBackground },
   { id: 'grovekeeper', path: '/grovekeeper', Page: GrovekeeperPage, Ambient: TreeBackground },
-  { id: 'lmstudio',    path: '/lmstudio',    Page: LMStudioPage },
-  { id: 'users',       path: '/users',       Page: UsersPage },
 ]
 
 const MODULES = [...GLOB_MODULES, ...STATIC_MODULES]
