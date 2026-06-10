@@ -12,7 +12,6 @@ import { api } from './api'
 import LoginPage   from './components/LoginPage'
 import LandingPage from './pages/LandingPage'
 import SettingsPage from './pages/SettingsPage'
-import VehiclesPage from './pages/VehiclesPage'
 import BudgetPage  from './pages/BudgetPage'
 
 // ── module registry (the seam) ──────────────────────────────────────────────
@@ -27,7 +26,6 @@ const discovered = import.meta.glob('../../../modules/*/ui/index.jsx', { eager: 
 const GLOB_MODULES = Object.values(discovered).map(m => m.default).filter(Boolean)
 
 const STATIC_MODULES = [
-  { id: 'vehicles',    path: '/vehicles',    Page: VehiclesPage },
   { id: 'budget',      path: '/budget/*',    Page: BudgetPage },
 ]
 
