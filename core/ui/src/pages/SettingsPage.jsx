@@ -5,10 +5,8 @@
 import { useState, useEffect, useRef } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { api } from '../api'
-import PlaidPanel from './PlaidPanel'
-import LMStudioPanel from './LMStudioPanel'
-import VaultPanel from '../components/VaultPanel'
 import EmojiPicker from '../components/EmojiPicker'
+import { MODULES } from '../moduleRegistry'
 
 const card = { background: 'var(--bg-secondary,#181818)', border: '1px solid var(--border-color,#2a2a2a)', borderRadius: 10, marginBottom: 16, overflow: 'hidden' }
 const head = { padding: '12px 16px', borderBottom: '1px solid var(--border-color,#2a2a2a)', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--text-tertiary,#666)' }
@@ -363,21 +361,16 @@ function AccountsSection() {
 
 export default function SettingsPage() {
   const { user, logout } = useAuth()
-  // Some settings panels belong to a module and only appear when it's active:
-  // Plaid ↔ Budget, AI host ↔ LM Studio.
-  const [budgetEnabled,   setBudgetEnabled]   = useState(false)
-  const [lmstudioEnabled, setLmstudioEnabled] = useState(false)
-  const [vaultEnabled,    setVaultEnabled]    = useState(false)
+  // Module settings panels are declared in each module's ui/index.jsx and appear
+  // only when that module is active. Discover them from the registry, gated on
+  // the live active set from GET /modules — no module is named here.
+  const [activeIds, setActiveIds] = useState(() => new Set())
   useEffect(() => {
     api.get('/modules')
-      .then(ms => {
-        const on = id => { const m = ms.find(x => x.id === id); return !!(m && m.installed && m.enabled) }
-        setBudgetEnabled(on('budget'))
-        setLmstudioEnabled(on('lmstudio'))
-        setVaultEnabled(on('vault'))
-      })
+      .then(ms => setActiveIds(new Set(ms.filter(m => m.installed && m.enabled).map(m => m.id))))
       .catch(() => {})
   }, [])
+  const modulePanels = MODULES.filter(m => m.settings && activeIds.has(m.id))
 
   return (
     <div style={{ maxWidth: 700, margin: '0 auto', padding: '1.5rem 1.5rem 3rem' }}>
@@ -417,28 +410,16 @@ export default function SettingsPage() {
         <ModulesSection />
       </CollapsibleCard>
 
-      {/* LM Studio — AI host settings, shown when the LM Studio module is enabled */}
-      {lmstudioEnabled && (
-        <CollapsibleCard title="LM Studio" defaultOpen={false}>
-          <LMStudioPanel />
-        </CollapsibleCard>
-      )}
-
-      {/* Vault — Vaultwarden connection, shown when the Vault module is enabled */}
-      {vaultEnabled && (
-        <CollapsibleCard title="Vault" defaultOpen={false}>
-          <VaultPanel />
-        </CollapsibleCard>
-      )}
-
-      {/* Plaid — shown when the Budget module is enabled */}
-      {budgetEnabled && (
-        <CollapsibleCard title="Plaid">
-          <div style={{ padding: 16 }}>
-            <PlaidPanel />
-          </div>
-        </CollapsibleCard>
-      )}
+      {/* Module settings panels — discovered from each active module's ui/index.jsx */}
+      {modulePanels.map(m => {
+        const S = m.settings
+        const Panel = S.Panel
+        return (
+          <CollapsibleCard key={m.id} title={S.title} defaultOpen={S.defaultOpen ?? true}>
+            {S.padded ? <div style={{ padding: 16 }}><Panel /></div> : <Panel />}
+          </CollapsibleCard>
+        )
+      })}
     </div>
   )
 }

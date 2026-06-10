@@ -12,16 +12,10 @@ import { api } from './api'
 import LoginPage   from './components/LoginPage'
 import LandingPage from './pages/LandingPage'
 import SettingsPage from './pages/SettingsPage'
+import { MODULES } from './moduleRegistry'
 
-// ── module registry (the seam) ──────────────────────────────────────────────
-// Module UIs are discovered ENTIRELY at build time: a Vite glob over
-// modules/<name>/ui/index.jsx, each default-exporting its contract
-// { id, path, Page, Ambient? }. Core names no module at compile time and
-// compiles whatever module folders are physically present — with none, the glob
-// is empty and core runs on its own. Routes + the ambient map read from here;
-// nav is already dynamic via GET /modules.
-const discovered = import.meta.glob('../../../modules/*/ui/index.jsx', { eager: true })
-const MODULES = Object.values(discovered).map(m => m.default).filter(Boolean)
+// Module UIs are discovered entirely at build time (see moduleRegistry.js).
+// Routes + the ambient map below read from MODULES; nav is driven by GET /modules.
 
 // ── top nav ───────────────────────────────────────────────────────────────────
 // Custom nav icon order is persisted per-device (localStorage) — the icon

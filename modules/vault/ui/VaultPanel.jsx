@@ -7,11 +7,11 @@
 // lives on the /vault page once a session is active.
 // =============================================================================
 import { useState } from 'react'
-import { useVault } from '../context/VaultContext'
+import { useVault } from '@core/context/VaultContext'
 import {
   deriveMasterKey, deriveMasterPasswordHash, stretchMasterKey,
   decryptEncStringToBytes, saveVaultSymKey,
-} from '../utils/vault'
+} from '@core/utils/vault'
 
 const VAULT_BASE = '/vault'
 
