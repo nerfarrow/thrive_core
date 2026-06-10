@@ -13,7 +13,6 @@ import LoginPage   from './components/LoginPage'
 import LandingPage from './pages/LandingPage'
 import SettingsPage from './pages/SettingsPage'
 import UsersPage   from './pages/UsersPage'
-import HomePage    from './pages/HomePage'
 import VehiclesPage from './pages/VehiclesPage'
 import BudgetPage  from './pages/BudgetPage'
 import VaultPage   from './pages/VaultPage'
@@ -24,14 +23,17 @@ import BlackHoleBackground from 'blackhole-lensing/react/BlackHoleBackground'
 import TreeBackground from 'grovekeeper/react/TreeBackground'
 
 // ── module registry (the seam) ──────────────────────────────────────────────
-// Every module's UI is declared here: its route, page component, and (optional)
-// ambient background renderer. This is the ONE place core names modules at
-// compile time — and the single seam that will later swap to build-time
-// discovery (a Vite glob over modules/<name>/ui), so core stops knowing module
-// names entirely. Nav is already dynamic (driven by GET /modules); routes and
-// the ambient map both read from here.
-const MODULES = [
-  { id: 'home',        path: '/home',        Page: HomePage },
+// Module UIs are discovered at BUILD TIME by a Vite glob over
+// modules/<name>/ui/index.jsx — each default-exports its contract
+// { id, path, Page, Ambient? }. Core names no glob'd module at compile time and
+// compiles whatever module folders are physically present (none is fine). Routes
+// and the ambient map read from the merged list; nav is already dynamic via
+// GET /modules. The STATIC_MODULES below are pages not yet migrated into
+// modules/<name>/ui — they'll move over one at a time until this list is empty.
+const discovered = import.meta.glob('../../../modules/*/ui/index.jsx', { eager: true })
+const GLOB_MODULES = Object.values(discovered).map(m => m.default).filter(Boolean)
+
+const STATIC_MODULES = [
   { id: 'vehicles',    path: '/vehicles',    Page: VehiclesPage },
   { id: 'budget',      path: '/budget/*',    Page: BudgetPage },
   { id: 'vault',       path: '/vault',       Page: VaultPage },
@@ -40,6 +42,8 @@ const MODULES = [
   { id: 'lmstudio',    path: '/lmstudio',    Page: LMStudioPage },
   { id: 'users',       path: '/users',       Page: UsersPage },
 ]
+
+const MODULES = [...GLOB_MODULES, ...STATIC_MODULES]
 
 // ── top nav ───────────────────────────────────────────────────────────────────
 // Custom nav icon order is persisted per-device (localStorage) — the icon

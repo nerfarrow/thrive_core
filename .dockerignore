@@ -1,0 +1,9 @@
+# Repo-root build context: the UI image builds from here (docker-compose
+# ui.build.context: ..) so its Vite glob can see modules/<name>/ui. Keep the
+# context lean — exclude everything the UI build doesn't need.
+.git
+**/node_modules
+**/dist
+**/__pycache__
+core/data
+os

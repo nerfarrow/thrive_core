@@ -29,11 +29,12 @@ services:
       - internal
 
   ui:
-    # context is core/ (this dir) so the build can include the shared
-    # blackhole-lensing/ library (imported by the UI via a Vite alias).
+    # context is the REPO ROOT (one level up) so the UI build can see both the
+    # shared renderer libs under core/ AND modules/<name>/ui — the latter is
+    # discovered at build time by a Vite glob (build-time module pages).
     build:
-      context: .
-      dockerfile: ui/Dockerfile
+      context: ..
+      dockerfile: core/ui/Dockerfile
     container_name: thrive_ui
     restart: unless-stopped
     ports:
