@@ -7,7 +7,10 @@
 auth       requisite  pam_nologin.so
 @include common-auth
 @include common-account
-session    required   pam_loginuid.so
+# pam_loginuid is OPTIONAL on purpose: the kernel cmdline sets audit=0 (to quiet
+# the console), which makes pam_loginuid fail to set /proc/self/loginuid. As
+# `required` that silently aborted the session phase → login authenticated then
+# bounced straight back to the prompt. Optional = login succeeds regardless.
+session    optional   pam_loginuid.so
 session    optional   pam_env.so readenv=1
 @include common-session
-@include common-password
