@@ -3,12 +3,13 @@
 // thrive UI
 //
 // Dashboard for the local LM Studio host: connection status + editable host URL,
-// a sortable table of every model the host advertises (skills, quant, context,
-// run counts; ● = loaded), a vision test playground (drop an image + a prompt →
+// a sortable table of every model the host advertises (skills, quant, run
+// counts; ● = loaded, with its loaded context shown under the name), a vision
+// test playground (drop an image + a prompt →
 // /lmstudio/vision → parsed JSON + the enhanced crop), and the per-model
 // extraction scoreboard. The module also installs a compact panel into Settings.
 // =============================================================================
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, Fragment } from 'react'
 import { api } from '../api'
 import { useToast } from '../context/ToastContext'
 
@@ -47,7 +48,43 @@ const paramsNum = (p) => {
 }
 
 // model-table column layout, shared by the header row and every body row
-const MODEL_COLS = '14px 56px minmax(0,1fr) 58px 100px 78px 84px 64px'
+// (last col is the load/unload action button)
+const MODEL_COLS = '14px 56px minmax(0,1fr) 58px 118px 74px 60px 30px'
+
+// ── load-config form ──────────────────────────────────────────────────────────
+// blank '' (or gpu_auto) means "leave at the host default". Booleans are tri-state
+// selects ('' | 'on' | 'off') so "default" stays distinct from an explicit false.
+const blankCfg = (m) => ({
+  context_length: m.max_ctx ? String(m.max_ctx) : '',
+  gpu_auto: true, gpu_ratio: 100,           // GPU offload: auto, or a 0–100% layer ratio
+  flash_attention: '', offload_kv_cache_to_gpu: '', keep_model_in_memory: '',
+  gpu_strict_vram_cap: '', use_fp16_for_kv_cache: '', try_mmap: '',
+  eval_batch_size: '', num_experts: '', seed: '',
+  rope_frequency_base: '', rope_frequency_scale: '', kv_quant: '',
+})
+
+// quant options for the K/V cache (one control drives both K and V — they're set
+// together in practice). Smaller = less memory at long context, slightly lossy.
+const KV_QUANTS = ['f16', 'q8_0', 'q5_1', 'q5_0', 'q4_1', 'q4_0']
+
+// fold the form into the SDK's snake_case config dict, dropping anything at default
+const buildConfig = (c) => {
+  const out = {}
+  const int = (k, v) => { const n = parseInt(v);   if (Number.isFinite(n)) out[k] = n }
+  const flt = (k, v) => { const n = parseFloat(v); if (Number.isFinite(n)) out[k] = n }
+  const bool = (k) => { if (c[k] === 'on') out[k] = true; else if (c[k] === 'off') out[k] = false }
+  if (c.context_length) int('context_length', c.context_length)
+  if (!c.gpu_auto) out.gpu = { ratio: Math.max(0, Math.min(100, parseInt(c.gpu_ratio) || 0)) / 100 }
+  bool('flash_attention'); bool('offload_kv_cache_to_gpu'); bool('keep_model_in_memory')
+  bool('gpu_strict_vram_cap'); bool('use_fp16_for_kv_cache'); bool('try_mmap')
+  if (c.eval_batch_size) int('eval_batch_size', c.eval_batch_size)
+  if (c.num_experts)     int('num_experts', c.num_experts)
+  if (c.seed)            int('seed', c.seed)
+  if (c.rope_frequency_base)  flt('rope_frequency_base', c.rope_frequency_base)
+  if (c.rope_frequency_scale) flt('rope_frequency_scale', c.rope_frequency_scale)
+  if (c.kv_quant) { out.llama_k_cache_quantization_type = c.kv_quant; out.llama_v_cache_quantization_type = c.kv_quant }
+  return out
+}
 
 const DEFAULT_PROMPT =
   'Read all the text and numbers visible in this image. ' +
@@ -70,6 +107,10 @@ export default function LMStudioPage() {
   const [visModel, setVisModel] = useState('')   // configured default
   const [stats,    setStats]    = useState([])
   const [probing,  setProbing]  = useState(true)
+  const [busy,     setBusy]     = useState({})   // model id → true while (un)loading on the host
+  const [cfgFor,   setCfgFor]   = useState(null) // model id whose load-config strip is open
+  const [cfg,      setCfg]      = useState({})   // load-config form values for that strip
+  const [cfgAdv,   setCfgAdv]   = useState(false)// advanced section expanded?
   const [sort,     setSort]     = useState({ key: 'type', dir: 1 })   // model-table sort
 
   // vision tester
@@ -101,6 +142,52 @@ export default function LMStudioPage() {
   }, [])
 
   useEffect(() => { loadStatus(); loadStats() }, [loadStatus, loadStats])
+
+  // open the load-config strip under a model, seeding the form from its defaults
+  const openCfg = (m) => { setCfg(blankCfg(m)); setCfgAdv(false); setCfgFor(m.id) }
+  const up = (k, v) => setCfg(c => ({ ...c, [k]: v }))   // patch one form field
+
+  // load/unload a model on the host. Blocks for the host round-trip (a big model
+  // can take a while to load), then re-probes so the ● dot + loaded-ctx refresh.
+  // On load, the open strip's form becomes the SDK config; unload needs no config.
+  const perform = async (m, loaded) => {
+    const label = m.name || m.id
+    const config = loaded ? null : buildConfig(cfg)
+    setCfgFor(null)
+    setBusy(b => ({ ...b, [m.id]: true }))
+    if (!loaded) showToast(`Loading ${label}…`, 'info')
+    try {
+      const body = loaded ? { model: m.id, type: m.type } : { model: m.id, type: m.type, config }
+      await api.post(loaded ? '/lmstudio/unload' : '/lmstudio/load', body)
+      showToast(loaded ? `Unloaded ${label}` : `Loaded ${label}`, 'success')
+      await loadStatus()
+    } catch (e) {
+      showToast(e.message || 'Request failed', 'error')
+    } finally {
+      setBusy(b => { const n = { ...b }; delete n[m.id]; return n })
+    }
+  }
+
+  // compact renderers for the advanced load-config fields. Plain functions (not
+  // components) so React keeps each input's focus across keystrokes.
+  const fieldCol = { display: 'flex', flexDirection: 'column', gap: 3, minWidth: 0 }
+  const miniLbl  = { fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--text-tertiary,#666)' }
+  const miniInp  = { ...inp, padding: '4px 7px', fontSize: 11 }
+  const boolSel = (k, label) => (
+    <label key={k} style={fieldCol}>
+      <span style={miniLbl}>{label}</span>
+      <select value={cfg[k] ?? ''} onChange={e => up(k, e.target.value)} style={miniInp}>
+        <option value="">default</option><option value="on">on</option><option value="off">off</option>
+      </select>
+    </label>
+  )
+  const numFld = (k, label, ph, step) => (
+    <label key={k} style={fieldCol}>
+      <span style={miniLbl}>{label}</span>
+      <input type="number" value={cfg[k] ?? ''} step={step} placeholder={ph || ''}
+        onChange={e => up(k, e.target.value)} style={miniInp} />
+    </label>
+  )
 
   const pickImage = (file) => {
     if (!file) return
@@ -135,7 +222,6 @@ export default function LMStudioPage() {
     params: m => paramsNum(m.params),
     pub:    m => m.publisher?.toLowerCase(),
     quant:  m => quantNum(m.quant),
-    ctx:    m => m.max_ctx,
     runs:   m => statByModel[m.id]?.total ?? 0,
   }[sort.key]
   const sortedModels = [...models].sort((a, b) => {
@@ -193,15 +279,17 @@ export default function LMStudioPage() {
                 <Th k="params" label="Params" />
                 <Th k="pub"    label="Publisher" />
                 <Th k="quant"  label="Quant" />
-                <Th k="ctx"   label="Ctx" align="right" />
                 <Th k="runs"  label="Runs" align="right" />
+                <span />
               </div>
               {sortedModels.map(m => {
                 const isDefault = m.id === visModel
                 const s = statByModel[m.id]
                 const loaded = m.state === 'loaded'
+                const cfgOpen = cfgFor === m.id
                 return (
-                  <div key={m.id} style={{ display: 'grid', gridTemplateColumns: MODEL_COLS, gap: 8, alignItems: 'center', padding: '6px 16px', borderTop: '1px solid var(--border-color,#2a2a2a)' }}>
+                 <Fragment key={m.id}>
+                  <div style={{ display: 'grid', gridTemplateColumns: MODEL_COLS, gap: 8, alignItems: 'center', padding: '6px 16px', borderTop: '1px solid var(--border-color,#2a2a2a)' }}>
                     <span title={loaded ? 'loaded' : 'not loaded'}
                       style={{ width: 7, height: 7, borderRadius: '50%', background: loaded ? 'var(--color-success,#22c55e)' : 'var(--border-color,#444)' }} />
                     {/* skill badges — what this model can do */}
@@ -213,14 +301,23 @@ export default function LMStudioPage() {
                         </span>
                       ))}
                     </span>
-                    <div style={{ minWidth: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <span style={{ fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: loaded ? 'var(--text-primary,#e8e6e0)' : 'var(--text-secondary,#aaa)' }} title={m.id}>{m.name || m.id}</span>
-                      {isDefault && (
-                        <span title="Default vision model — change in Settings → LM Studio"
-                          style={{ flexShrink: 0, padding: '2px 7px', fontSize: 9, borderRadius: 6, fontFamily: 'monospace',
-                            textTransform: 'uppercase', letterSpacing: '0.08em', background: ACCENT, color: '#0f0f0f' }}>
-                          ✓ default
-                        </span>
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span style={{ fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: loaded ? 'var(--text-primary,#e8e6e0)' : 'var(--text-secondary,#aaa)' }} title={m.id}>{m.name || m.id}</span>
+                        {isDefault && (
+                          <span title="Default vision model — change in Settings → LM Studio"
+                            style={{ flexShrink: 0, padding: '2px 7px', fontSize: 9, borderRadius: 6, fontFamily: 'monospace',
+                              textTransform: 'uppercase', letterSpacing: '0.08em', background: ACCENT, color: '#0f0f0f' }}>
+                            ✓ default
+                          </span>
+                        )}
+                      </div>
+                      {/* loaded models report the context window they were spun up with */}
+                      {loaded && m.loaded_ctx != null && (
+                        <div style={{ fontSize: 9, fontFamily: 'monospace', color: 'var(--text-tertiary,#666)', marginTop: 2 }}
+                          title={`loaded with ${m.loaded_ctx.toLocaleString()} ctx`}>
+                          ▸ {fmtK(m.loaded_ctx)} ctx
+                        </div>
                       )}
                     </div>
                     <span style={{ fontFamily: 'monospace', fontSize: 11, color: 'var(--text-secondary,#999)', whiteSpace: 'nowrap' }}>
@@ -232,14 +329,6 @@ export default function LMStudioPage() {
                     <span style={{ fontFamily: 'monospace', fontSize: 11, color: 'var(--text-secondary,#999)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={m.quant || undefined}>
                       {m.quant || '—'}
                     </span>
-                    <div style={{ textAlign: 'right', fontFamily: 'monospace' }}>
-                      <div style={{ fontSize: 11, color: 'var(--text-secondary,#999)' }}>{m.max_ctx != null ? fmtK(m.max_ctx) : '—'}</div>
-                      {loaded && m.loaded_ctx != null && (
-                        <div style={{ fontSize: 9, color: 'var(--text-tertiary,#666)' }} title={`loaded with ${m.loaded_ctx.toLocaleString()} ctx`}>
-                          ▸ {fmtK(m.loaded_ctx)}
-                        </div>
-                      )}
-                    </div>
                     <span style={{ fontSize: 10, textAlign: 'right', color: 'var(--text-tertiary,#888)' }}>
                       {s && s.total > 0 ? (
                         <>
@@ -248,7 +337,94 @@ export default function LMStudioPage() {
                         </>
                       ) : '—'}
                     </span>
+                    {/* load (opens a context strip) / unload (one click) on the host */}
+                    <button onClick={() => loaded ? perform(m, true) : (cfgOpen ? setCfgFor(null) : openCfg(m))}
+                      disabled={!online || !!busy[m.id]}
+                      title={busy[m.id] ? 'Working…' : loaded ? 'Unload from host' : 'Load on host'}
+                      style={{ justifySelf: 'center', width: 24, height: 24, padding: 0, lineHeight: 1, borderRadius: 6,
+                        fontSize: 11, fontFamily: 'monospace', cursor: (!online || busy[m.id]) ? 'default' : 'pointer',
+                        background: loaded ? 'rgba(34,197,94,0.12)' : cfgOpen ? `${ACCENT}22` : 'var(--bg-tertiary,#222)',
+                        border: `1px solid ${loaded ? 'rgba(34,197,94,0.45)' : cfgOpen ? ACCENT : 'var(--border-color,#333)'}`,
+                        color: loaded ? 'var(--color-success,#22c55e)' : cfgOpen ? ACCENT : 'var(--text-secondary,#aaa)',
+                        opacity: (!online || busy[m.id]) ? 0.5 : 1 }}>
+                      {busy[m.id] ? '◐' : loaded ? '⏏' : cfgOpen ? '×' : '▶'}
+                    </button>
                   </div>
+
+                  {/* load-config strip: context + GPU up front, the rest under Advanced */}
+                  {cfgOpen && (
+                    <div style={{ padding: '10px 16px 14px 38px', borderTop: '1px dashed var(--border-color,#2a2a2a)',
+                      background: 'var(--bg-tertiary,#1a1a1a)', display: 'flex', flexDirection: 'column', gap: 11 }}>
+
+                      {/* primary row: context length + GPU offload + actions */}
+                      <div style={{ display: 'flex', alignItems: 'flex-end', gap: 16, flexWrap: 'wrap' }}>
+                        <label style={fieldCol}>
+                          <span style={miniLbl}>Context length</span>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <input type="number" min="1024" step="1024" value={cfg.context_length} placeholder="model default"
+                              onChange={e => up('context_length', e.target.value)}
+                              onKeyDown={e => { if (e.key === 'Enter') perform(m, false) }}
+                              style={{ ...miniInp, width: 120, fontSize: 12 }} />
+                            <span style={{ fontSize: 10, color: 'var(--text-tertiary,#666)' }}>
+                              {m.max_ctx ? `max ${fmtK(m.max_ctx)}` : 'blank = default'}
+                            </span>
+                          </div>
+                        </label>
+
+                        <label style={fieldCol}>
+                          <span style={miniLbl}>GPU offload</span>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, height: 26 }}>
+                            <label style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: 'var(--text-secondary,#aaa)', cursor: 'pointer' }}>
+                              <input type="checkbox" checked={cfg.gpu_auto} onChange={e => up('gpu_auto', e.target.checked)} /> auto
+                            </label>
+                            {!cfg.gpu_auto && (
+                              <>
+                                <input type="range" min="0" max="100" step="5" value={cfg.gpu_ratio}
+                                  onChange={e => up('gpu_ratio', e.target.value)} style={{ width: 120, accentColor: ACCENT }} />
+                                <span style={{ fontFamily: 'monospace', fontSize: 11, color: 'var(--text-secondary,#aaa)', width: 34, textAlign: 'right' }}>{cfg.gpu_ratio}%</span>
+                              </>
+                            )}
+                          </div>
+                        </label>
+
+                        <div style={{ flex: 1 }} />
+                        <button onClick={() => perform(m, false)} disabled={!!busy[m.id]}
+                          style={{ padding: '6px 16px', fontFamily: 'monospace', fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase',
+                            background: ACCENT, border: 'none', borderRadius: 6, color: '#0f0f0f', fontWeight: 600, cursor: 'pointer' }}>Load</button>
+                        <button onClick={() => setCfgFor(null)} style={{ ...btnS, padding: '6px 12px', fontSize: 10 }}>Cancel</button>
+                      </div>
+
+                      {/* advanced — everything else the SDK accepts at load time */}
+                      <button onClick={() => setCfgAdv(a => !a)}
+                        style={{ alignSelf: 'flex-start', background: 'none', border: 'none', padding: 0, cursor: 'pointer',
+                          fontFamily: 'inherit', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-tertiary,#888)' }}>
+                        {cfgAdv ? '▾' : '▸'} Advanced
+                      </button>
+                      {cfgAdv && (
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(138px, 1fr))', gap: '10px 14px' }}>
+                          {boolSel('flash_attention', 'Flash attention')}
+                          {boolSel('offload_kv_cache_to_gpu', 'KV cache on GPU')}
+                          {boolSel('keep_model_in_memory', 'Keep in memory')}
+                          {boolSel('gpu_strict_vram_cap', 'Strict VRAM cap')}
+                          <label style={fieldCol}>
+                            <span style={miniLbl}>KV cache quant</span>
+                            <select value={cfg.kv_quant} onChange={e => up('kv_quant', e.target.value)} style={miniInp}>
+                              <option value="">default</option>
+                              {KV_QUANTS.map(q => <option key={q} value={q}>{q}</option>)}
+                            </select>
+                          </label>
+                          {boolSel('use_fp16_for_kv_cache', 'fp16 KV cache')}
+                          {boolSel('try_mmap', 'mmap file')}
+                          {numFld('eval_batch_size', 'Eval batch', 'auto', 1)}
+                          {numFld('num_experts', 'MoE experts', 'auto', 1)}
+                          {numFld('seed', 'Seed', 'random', 1)}
+                          {numFld('rope_frequency_base', 'RoPE base', 'auto', 1000)}
+                          {numFld('rope_frequency_scale', 'RoPE scale', 'auto', 0.1)}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                 </Fragment>
                 )
               })}
             </>

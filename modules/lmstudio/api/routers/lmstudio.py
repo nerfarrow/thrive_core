@@ -15,11 +15,21 @@
 #   • config is served under this router (/lmstudio/config)
 # =============================================================================
 from fastapi import APIRouter, HTTPException
+from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel
 from typing import Optional
 import os, re, json, base64, io
 import httpx
 from PIL import Image, ImageEnhance, ImageOps
+
+# The LM Studio REST API can only *read* model state. Loading/unloading lives on
+# the host's websocket SDK channel (/api/llm, /api/embedding), which the lmstudio
+# SDK speaks. Imported softly so a missing dep degrades only the load/unload
+# routes — discovery, vision, and config keep working without it.
+try:
+    import lmstudio as _lms
+except Exception:
+    _lms = None
 
 from routers.auth import get_db
 
@@ -223,6 +233,77 @@ async def status():
     except Exception:
         pass
     return out
+
+
+# ── model load / unload (SDK over the host's websocket channel) ───────────────
+# The SDK is synchronous (websocket round-trips), so every call is offloaded to a
+# worker thread to keep the event loop free while a large model loads.
+class LoadRequest(BaseModel):
+    model:  str
+    type:   Optional[str] = None   # "embedding" → embedding ns; anything else (incl. vision) → llm
+    # SDK load config, snake_case keys (context_length, gpu:{ratio}, flash_attention,
+    # llama_k/v_cache_quantization_type, …). Passed straight to the SDK, which
+    # validates it — bad keys/values surface as a 502. None = model defaults.
+    config: Optional[dict] = None
+
+class UnloadRequest(BaseModel):
+    model: str
+    type:  Optional[str] = None
+
+def _sdk_host(base: str) -> str:
+    """The SDK wants a bare host:port; config stores a full URL."""
+    return re.sub(r"^https?://", "", base).rstrip("/")
+
+def _namespace(client, model_type: Optional[str]):
+    """Pick the SDK namespace for a model's type. Vision models are `llm` —
+    vision is a capability, not a separate type — so only embeddings branch off."""
+    return client.embedding if model_type == "embedding" else client.llm
+
+def _load_sync(base: str, model: str, model_type: Optional[str], config: Optional[dict]) -> str:
+    client = _lms.Client(_sdk_host(base))
+    try:
+        ns = _namespace(client, model_type)
+        # .model() is get-or-load: idempotent if the model is already up. ttl=None
+        # means "stay loaded until explicitly unloaded" — the user asked for it.
+        handle = ns.model(model, ttl=None, config=config or None)
+        return handle.identifier
+    finally:
+        client.close()
+
+def _unload_sync(base: str, model: str, model_type: Optional[str]) -> None:
+    client = _lms.Client(_sdk_host(base))
+    try:
+        _namespace(client, model_type).unload(model)
+    finally:
+        client.close()
+
+
+@router.post("/load")
+async def load_model(req: LoadRequest):
+    """Load a model on the host (or no-op if already loaded), optionally pinning a
+    context length. Blocks until the model is resident, so the client sees a
+    finished load when this returns."""
+    if _lms is None:
+        raise HTTPException(status_code=503, detail="lmstudio SDK not installed in the API image")
+    base = get_cfg("base_url", LMSTUDIO_BASE)
+    try:
+        ident = await run_in_threadpool(_load_sync, base, req.model, req.type, req.config)
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Load failed: {e}")
+    return {"ok": True, "model": req.model, "identifier": ident}
+
+
+@router.post("/unload")
+async def unload_model(req: UnloadRequest):
+    """Unload a model from the host, freeing its memory."""
+    if _lms is None:
+        raise HTTPException(status_code=503, detail="lmstudio SDK not installed in the API image")
+    base = get_cfg("base_url", LMSTUDIO_BASE)
+    try:
+        await run_in_threadpool(_unload_sync, base, req.model, req.type)
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Unload failed: {e}")
+    return {"ok": True, "model": req.model}
 
 
 # ── image enhancement ────────────────────────────────────────────────────────

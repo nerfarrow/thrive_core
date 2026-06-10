@@ -4,5 +4,8 @@ python-multipart>=0.0.9
 # vehicles/mpg module: vision fuel-log (image enhance + LLM host calls + Overpass)
 httpx>=0.27
 Pillow>=10.0
+# lmstudio module: load/unload models on the host over its websocket SDK channel
+# (LM Studio's REST API is read-only for model state — no /load or /unload there)
+lmstudio>=1.5
 # budget/plaid module: bank sync calls the Plaid API
 requests>=2.31
