@@ -65,6 +65,19 @@ def init_db():
                 last_used TEXT
             )
         """)
+        # load-attempt log: every model load, the config tried, and whether it
+        # worked — so you can see which param sets a model actually loads with
+        # (and why a load failed, e.g. VRAM at a given context length).
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS lmstudio_load_log (
+                id         INTEGER PRIMARY KEY AUTOINCREMENT,
+                model      TEXT NOT NULL,
+                config     TEXT,                 -- JSON of the load config tried (NULL = defaults)
+                ok         INTEGER NOT NULL,      -- 1 success, 0 fail
+                error      TEXT,                  -- message when ok=0
+                created_at TEXT DEFAULT (datetime('now'))
+            )
+        """)
         conn.commit()
     finally:
         conn.close()
@@ -90,6 +103,19 @@ def set_cfg(key: str, value: str):
             """INSERT INTO lmstudio_config (key, value, updated_at) VALUES (?, ?, datetime('now'))
                ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=datetime('now')""",
             (key, value)
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def record_load(model: str, config: Optional[dict], ok: bool, error: Optional[str] = None):
+    """Append a load attempt (model + config tried + outcome) to the load log."""
+    conn = get_db()
+    try:
+        conn.execute(
+            "INSERT INTO lmstudio_load_log (model, config, ok, error) VALUES (?, ?, ?, ?)",
+            (model, json.dumps(config) if config else None, 1 if ok else 0, error)
         )
         conn.commit()
     finally:
@@ -289,8 +315,38 @@ async def load_model(req: LoadRequest):
     try:
         ident = await run_in_threadpool(_load_sync, base, req.model, req.type, req.config)
     except Exception as e:
+        record_load(req.model, req.config, False, str(e)[:300])
         raise HTTPException(status_code=502, detail=f"Load failed: {e}")
+    record_load(req.model, req.config, True)
     return {"ok": True, "model": req.model, "identifier": ident}
+
+
+@router.get("/load-log")
+def load_log(model: Optional[str] = None, limit: int = 50):
+    """Recent load attempts, newest first: the config tried + whether it loaded
+    (with the error on failure). Optionally filtered to one model."""
+    conn = get_db()
+    try:
+        if model:
+            rows = conn.execute(
+                "SELECT id, model, config, ok, error, created_at FROM lmstudio_load_log "
+                "WHERE model=? ORDER BY id DESC LIMIT ?", (model, limit)).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT id, model, config, ok, error, created_at FROM lmstudio_load_log "
+                "ORDER BY id DESC LIMIT ?", (limit,)).fetchall()
+    finally:
+        conn.close()
+    out = []
+    for r in rows:
+        d = dict(r)
+        try:
+            d["config"] = json.loads(d["config"]) if d["config"] else None
+        except Exception:
+            pass
+        d["ok"] = bool(d["ok"])
+        out.append(d)
+    return out
 
 
 @router.post("/unload")

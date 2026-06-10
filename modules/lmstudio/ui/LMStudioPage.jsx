@@ -93,6 +93,39 @@ const DEFAULT_PROMPT =
 // compact token-count formatter: 128000 → "128k", 4096 → "4.1k", 512 → "512"
 const fmtK = (n) => n == null ? null : n >= 1000 ? `${+(n / 1000).toFixed(n < 10000 ? 1 : 0)}k` : `${n}`
 
+// compact human summary of a load config, for the history view
+function summarizeConfig(c) {
+  if (!c) return ['defaults']
+  const out = []
+  if (c.context_length)                  out.push(`ctx ${fmtK(c.context_length)}`)
+  if (c.gpu && c.gpu.ratio != null)      out.push(`gpu ${Math.round(c.gpu.ratio * 100)}%`)
+  if (c.flash_attention != null)         out.push(`flash ${c.flash_attention ? 'on' : 'off'}`)
+  if (c.offload_kv_cache_to_gpu != null) out.push(`kv→gpu ${c.offload_kv_cache_to_gpu ? 'on' : 'off'}`)
+  if (c.keep_model_in_memory != null)    out.push(`keep ${c.keep_model_in_memory ? 'on' : 'off'}`)
+  if (c.gpu_strict_vram_cap != null)     out.push(`vram-cap ${c.gpu_strict_vram_cap ? 'on' : 'off'}`)
+  if (c.llama_k_cache_quantization_type) out.push(`kv ${c.llama_k_cache_quantization_type}`)
+  if (c.use_fp16_for_kv_cache != null)   out.push(`fp16kv ${c.use_fp16_for_kv_cache ? 'on' : 'off'}`)
+  if (c.try_mmap != null)                out.push(`mmap ${c.try_mmap ? 'on' : 'off'}`)
+  if (c.eval_batch_size)                 out.push(`batch ${c.eval_batch_size}`)
+  if (c.num_experts)                     out.push(`experts ${c.num_experts}`)
+  if (c.seed)                            out.push(`seed ${c.seed}`)
+  if (c.rope_frequency_base)             out.push(`rope-base ${c.rope_frequency_base}`)
+  if (c.rope_frequency_scale)            out.push(`rope-scale ${c.rope_frequency_scale}`)
+  return out.length ? out : ['defaults']
+}
+
+// "5m ago" from an SQLite UTC timestamp (datetime('now'))
+function ago(utc) {
+  if (!utc) return ''
+  const t = new Date(utc.replace(' ', 'T') + 'Z').getTime()
+  if (isNaN(t)) return ''
+  const s = Math.max(0, (Date.now() - t) / 1000)
+  if (s < 60)    return `${Math.round(s)}s ago`
+  if (s < 3600)  return `${Math.round(s / 60)}m ago`
+  if (s < 86400) return `${Math.round(s / 3600)}h ago`
+  return `${Math.round(s / 86400)}d ago`
+}
+
 const card   = { background: 'var(--bg-secondary,#181818)', border: '1px solid var(--border-color,#2a2a2a)', borderRadius: 10, overflow: 'hidden' }
 const head   = { padding: '10px 16px', borderBottom: '1px solid var(--border-color,#2a2a2a)', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--text-tertiary,#666)' }
 const inp    = { fontFamily: 'monospace', fontSize: 13, background: 'var(--bg-tertiary,#222)', border: '1px solid var(--border-color,#333)', borderRadius: 6, color: 'inherit', padding: '7px 10px', outline: 'none', width: '100%', boxSizing: 'border-box' }
@@ -106,6 +139,7 @@ export default function LMStudioPage() {
   const [models,   setModels]   = useState([])
   const [visModel, setVisModel] = useState('')   // configured default
   const [stats,    setStats]    = useState([])
+  const [loadLog,  setLoadLog]  = useState([])   // recent load attempts (config tried + outcome)
   const [probing,  setProbing]  = useState(true)
   const [busy,     setBusy]     = useState({})   // model id → true while (un)loading on the host
   const [cfgFor,   setCfgFor]   = useState(null) // model id whose load-config strip is open
@@ -141,7 +175,11 @@ export default function LMStudioPage() {
     try { setStats(await api.get('/lmstudio/model-stats')) } catch {}
   }, [])
 
-  useEffect(() => { loadStatus(); loadStats() }, [loadStatus, loadStats])
+  const loadLoadLog = useCallback(async () => {
+    try { setLoadLog(await api.get('/lmstudio/load-log?limit=30')) } catch {}
+  }, [])
+
+  useEffect(() => { loadStatus(); loadStats(); loadLoadLog() }, [loadStatus, loadStats, loadLoadLog])
 
   // open the load-config strip under a model, seeding the form from its defaults
   const openCfg = (m) => { setCfg(blankCfg(m)); setCfgAdv(false); setCfgFor(m.id) }
@@ -165,6 +203,7 @@ export default function LMStudioPage() {
       showToast(e.message || 'Request failed', 'error')
     } finally {
       setBusy(b => { const n = { ...b }; delete n[m.id]; return n })
+      if (!loaded) loadLoadLog()   // a load attempt (ok or fail) just logged a row
     }
   }
 
@@ -513,6 +552,37 @@ export default function LMStudioPage() {
                 <span style={{ textAlign: 'right', color: 'var(--color-success,#22c55e)' }}>{s.success}</span>
                 <span style={{ textAlign: 'right', color: 'var(--color-danger,#ef4444)' }}>{s.fail}</span>
                 <span style={{ textAlign: 'right', color: 'var(--text-secondary,#aaa)' }}>{s.rate != null ? `${Math.round(s.rate * 100)}%` : '—'}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── load history ── what was tried + whether it loaded ── */}
+      {loadLog.length > 0 && (
+        <div style={card}>
+          <div style={{ ...head, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <span>Load history</span>
+            <button onClick={loadLoadLog} title="Refresh" style={{ ...btnS, padding: '3px 8px', fontSize: 9 }}>↻</button>
+          </div>
+          <div style={{ padding: '2px 0' }}>
+            {loadLog.map(e => (
+              <div key={e.id} style={{ display: 'grid', gridTemplateColumns: '16px minmax(0,1fr) auto', gap: 8, alignItems: 'baseline', padding: '7px 16px', borderTop: '1px solid var(--border-color,#2a2a2a)' }}>
+                <span title={e.ok ? 'loaded' : (e.error || 'failed')}
+                  style={{ color: e.ok ? 'var(--color-success,#22c55e)' : 'var(--color-danger,#ef4444)', fontSize: 12 }}>{e.ok ? '✓' : '✗'}</span>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontSize: 12, fontFamily: 'monospace', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                    color: e.ok ? 'var(--text-primary,#e8e6e0)' : 'var(--text-secondary,#aaa)' }} title={e.model}>{e.model}</div>
+                  <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 4 }}>
+                    {summarizeConfig(e.config).map((c, i) => (
+                      <span key={i} style={{ fontSize: 9, fontFamily: 'monospace', padding: '1px 6px', borderRadius: 4, background: 'var(--bg-tertiary,#222)', color: 'var(--text-tertiary,#888)' }}>{c}</span>
+                    ))}
+                  </div>
+                  {!e.ok && e.error && (
+                    <div style={{ fontSize: 10, color: 'var(--color-danger,#ef4444)', marginTop: 3, fontFamily: 'monospace', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={e.error}>{e.error}</div>
+                  )}
+                </div>
+                <span style={{ fontSize: 10, color: 'var(--text-tertiary,#666)', whiteSpace: 'nowrap' }}>{ago(e.created_at)}</span>
               </div>
             ))}
           </div>
