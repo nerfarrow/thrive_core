@@ -1,0 +1,22 @@
+#!/bin/sh
+# First-boot: grow the root partition + ext4 to fill the SD card / disk.
+# The amd64 image uses systemd-repart for this, but repart only speaks GPT and
+# the Pi's disk is MBR — so this does the same job with growpart + resize2fs.
+# Idempotent via flag file (the unit also gates on it via ConditionPathExists).
+set -eu
+
+FLAG=/var/lib/sprout-grown
+[ -e "$FLAG" ] && exit 0
+
+ROOT_SRC=$(findmnt -no SOURCE /)            # /dev/mmcblk0p2 (SD) or /dev/sda2 (USB)
+case "$ROOT_SRC" in
+    *p[0-9]) DISK=${ROOT_SRC%p*};    PART=${ROOT_SRC##*p} ;;
+    *)       DISK=${ROOT_SRC%[0-9]}; PART=${ROOT_SRC##*[!0-9]} ;;
+esac
+
+echo "[sprout-grow] growing $DISK partition $PART"
+# growpart exits 1 with NOCHANGE when already full-size — that's fine
+growpart "$DISK" "$PART" || true
+resize2fs "$ROOT_SRC"
+touch "$FLAG"
+echo "[sprout-grow] done — root now fills the disk"

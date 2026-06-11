@@ -1,0 +1,8 @@
+# RPi archive on the running Pi (for kernel updates). Trusted: yes for the same
+# reason as the build-time copy in mkosi.sandbox/: trixie's sqv rejects the RPi
+# key's SHA1 binding signature (policy change 2026-02-01). Revisit if RPi re-keys.
+Types: deb
+URIs: http://archive.raspberrypi.com/debian/
+Suites: trixie
+Components: main
+Trusted: yes

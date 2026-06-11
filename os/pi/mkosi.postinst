@@ -1,0 +1,55 @@
+#!/usr/bin/env bash
+# Pi-4 variant of ../mkosi.postinst — same machinery (runs on the HOST with
+# $BUILDROOT = image root; enable units via wants-symlinks, create the default
+# user by writing passwd/shadow directly), minus the desktop (headless image)
+# and with sprout-grow replacing systemd-repart (no GPT on the Pi → repart
+# can't grow an MBR root; growpart+resize2fs on first boot does instead).
+set -euo pipefail
+
+R="$BUILDROOT"
+
+enable_unit() {
+    local unit="$1" target="${2:-multi-user.target}" src="" wd="$R/etc/systemd/system/${2:-multi-user.target}.wants"
+    mkdir -p "$wd"
+    for d in /usr/lib/systemd/system /lib/systemd/system /etc/systemd/system /usr/local/lib/systemd/system; do
+        if [ -e "$R$d/$unit" ]; then src="$d/$unit"; break; fi
+    done
+    if [ -n "$src" ]; then
+        ln -sf "$src" "$wd/$unit"
+        echo "[postinst] enabled $unit -> $src (in $target)"
+    else
+        echo "[postinst] WARN: $unit not found in image"
+    fi
+}
+
+enable_unit docker.service     # container engine
+enable_unit ssh.service        # remote admin
+enable_unit thrive.service     # the appliance: pulls the thrive repo + runs core/
+enable_unit sprout-grow.service  # grow root to fill the SD card on first boot (MBR-safe)
+
+# networking: systemd-networkd wired DHCP + resolved (shared 20-dhcp.network overlay)
+enable_unit systemd-networkd.service
+enable_unit systemd-networkd.socket              sockets.target
+enable_unit systemd-networkd-wait-online.service network-online.target
+enable_unit systemd-resolved.service
+ln -sf /run/systemd/resolve/stub-resolv.conf "$R/etc/resolv.conf"
+
+# --- default appliance login: thrive / growth (sudo-capable) ------------------
+# Same dev-default credentials as the amd64 image; change for any real deploy.
+if ! grep -q '^thrive:' "$R/etc/passwd"; then
+    echo 'thrive:x:1000:1000:thrive appliance admin:/home/thrive:/bin/bash' >> "$R/etc/passwd"
+    echo 'thrive:$6$sproutv1$azy5OZ0XW/YOufw3lOwF5nHD.MxsAtEOIXaaH6P2.Zhk9Dejq54xvEOPNwyc5YmXMTGFwTTSJw.YFVmFrFjcd0:20000:0:99999:7:::' >> "$R/etc/shadow"
+    echo 'thrive:x:1000:' >> "$R/etc/group"
+    echo 'thrive:!::'     >> "$R/etc/gshadow"
+    awk -F: 'BEGIN{OFS=":"} $1=="sudo"{ if($4=="") $4="thrive"; else $4=$4",thrive" } {print}' \
+        "$R/etc/group" > "$R/etc/group.tmp" && mv "$R/etc/group.tmp" "$R/etc/group"
+    mkdir -p "$R/home/thrive"
+    cp -aT "$R/etc/skel" "$R/home/thrive" 2>/dev/null || true
+    chown -R 1000:1000 "$R/home/thrive"
+    chmod 700 "$R/home/thrive"
+    echo "[postinst] created default user thrive (sudo)"
+fi
+
+# headless: default to the text console (no graphical.target on this image)
+ln -sf /usr/lib/systemd/system/multi-user.target "$R/etc/systemd/system/default.target"
+echo "[postinst] pi image: headless multi-user.target default"

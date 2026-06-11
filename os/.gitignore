@@ -15,3 +15,9 @@ mkosi.builddir/
 
 # mkosi "latest" output symlink (-> thriveos.raw)
 /thriveos
+/sprout
+
+# sprout-pi: mkosi Format=directory rootfs tree (root-owned, ~2GB build output,
+# NOT source). The pi/ build definition (mkosi.conf, build.sh, mkosi.extra, …) is
+# tracked; only the assembled rootfs is ignored.
+pi/sprout-pi/

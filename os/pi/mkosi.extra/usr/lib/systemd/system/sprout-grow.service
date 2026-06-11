@@ -1,0 +1,15 @@
+[Unit]
+Description=Grow root filesystem to fill the disk (first boot, MBR-safe)
+# after the root fs is mounted read-write, before anything heavy (docker) writes
+After=systemd-remount-fs.service
+Before=docker.service
+ConditionPathExists=!/var/lib/sprout-grown
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/bin/sprout-grow
+StandardOutput=journal+console
+
+[Install]
+WantedBy=multi-user.target

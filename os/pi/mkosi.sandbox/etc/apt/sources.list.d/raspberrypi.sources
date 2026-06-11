@@ -1,0 +1,11 @@
+# RPi archive — source of the Pi 5 kernel (linux-image-rpi-2712) + firmware.
+# Trusted: yes because trixie's apt verifier (sqv) rejects the RPi key's SHA1
+# binding signature as of 2026-02-01 ("SHA1 is not considered secure"). The key
+# itself is fine; it just hasn't been re-signed with a stronger digest. We accept
+# the repo unverified for the build — the alternative (mainline kernel) simply has
+# no RP1 drivers, so a Pi 5 wouldn't network at all. Revisit if RPi re-keys.
+Types: deb
+URIs: http://archive.raspberrypi.com/debian/
+Suites: trixie
+Components: main
+Trusted: yes

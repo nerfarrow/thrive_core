@@ -1,0 +1,11 @@
+# Userland stays Debian; ONLY the Pi kernel + boot firmware come from the RPi
+# archive (it has the RP1 drivers the Pi 5 needs, which mainline 6.12 lacks).
+# Default everything from RPi to a low priority so Debian wins for any shared
+# package, then explicitly raise the kernel/firmware we actually want.
+Package: *
+Pin: origin archive.raspberrypi.com
+Pin-Priority: 100
+
+Package: linux-image-rpi-2712 linux-image-rpi-v8 linux-headers-rpi-2712 raspi-firmware raspberrypi-archive-keyring raspberrypi-bootloader raspi-utils libraspberrypi0
+Pin: origin archive.raspberrypi.com
+Pin-Priority: 1000

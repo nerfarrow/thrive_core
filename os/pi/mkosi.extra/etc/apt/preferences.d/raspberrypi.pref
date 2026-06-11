@@ -1,0 +1,10 @@
+# Userland stays Debian; only the Pi kernel + boot firmware track the RPi archive
+# (so kernel updates on the running Pi keep RP1/Pi-5 support). Mirrors the
+# build-time pin in mkosi.sandbox/.
+Package: *
+Pin: origin archive.raspberrypi.com
+Pin-Priority: 100
+
+Package: linux-image-rpi-2712 linux-image-rpi-v8 linux-headers-rpi-2712 raspi-firmware raspberrypi-archive-keyring raspberrypi-bootloader raspi-utils libraspberrypi0
+Pin: origin archive.raspberrypi.com
+Pin-Priority: 1000

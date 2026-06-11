@@ -9,7 +9,7 @@ BASE ?= debian:trixie-slim
 KVM := $(shell [ -e /dev/kvm ] && echo "--device /dev/kvm" || echo "")
 RUN := docker run --rm --privileged $(KVM) -v $$PWD:/work -w /work $(BUILDER)
 
-.PHONY: builder image vm shell clean
+.PHONY: builder image pi-image vm shell clean
 
 builder:                ## build the build-container (debian + mkosi + qemu)
 	docker build --build-arg BASE=$(BASE) -t $(BUILDER) build/
@@ -20,6 +20,11 @@ image: builder          ## produce sprout*.raw
 	# so re-builds reuse the ~1GB of packages instead of re-downloading them.
 	# --force replaces a prior sprout.raw (mkosi refuses to overwrite otherwise)
 	$(RUN) --package-cache-directory=/work/mkosi.cache --force build
+
+pi-image: builder       ## produce sprout-pi.raw for Raspberry Pi 5 (arm64 MBR; dd to SD card)
+	# arm64 rootfs cross-built under qemu binfmt, then pi/build.sh assembles the
+	# Pi-bootable MBR disk — the Pi firmware can't read mkosi's GPT/UEFI output
+	docker run --rm --privileged -v $$PWD:/work -w /work/pi --entrypoint /bin/bash $(BUILDER) build.sh
 
 vm: builder             ## boot the built image in QEMU
 	docker run --rm -it --privileged $(KVM) -v $$PWD:/work -w /work $(BUILDER) vm
@@ -37,4 +42,6 @@ shell: builder          ## drop into the build-container for debugging
 
 clean:                  ## remove build artifacts
 	-$(RUN) clean
+	# pi rootfs is root-owned (written by the privileged container) — remove it the same way
+	-docker run --rm --privileged -v $$PWD:/work -w /work --entrypoint rm $(BUILDER) -rf pi/sprout-pi pi/mkosi.output
 	rm -rf output mkosi.output *.raw *.qcow2

@@ -1,0 +1,5 @@
+# sprout-pi mounts. MBR disk → no systemd-gpt-auto magic (that's GPT-only), so
+# root and the firmware partition are mounted the classic way, by label.
+# Labels are written by build.sh at image-assembly time.
+LABEL=sprout-root  /               ext4  defaults,noatime  0 1
+LABEL=SPROUTBOOT   /boot/firmware  vfat  defaults,noatime  0 2

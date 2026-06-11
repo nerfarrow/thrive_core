@@ -22,7 +22,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         qemu-utils \
         ovmf \
         git \
+        qemu-user-static \
+        binfmt-support \
+        fdisk \
     && rm -rf /var/lib/apt/lists/*
+# qemu-user-static + binfmt-support: arm64 (Raspberry Pi) rootfs builds on an
+# amd64 host — pi/build.sh registers the qemu-aarch64 binfmt at runtime (the deb
+# postinst can't do it during docker build; binfmt_misc isn't mounted there).
+# fdisk: sfdisk for the Pi image's MBR partition table (the Pi firmware can't
+# read GPT, which is all mkosi/systemd-repart produce).
 
 WORKDIR /work
 # `docker run thriveos-builder build`  ->  `mkosi build`
