@@ -58,8 +58,9 @@ make clean     # remove build artifacts
   without rebuilding the OS image. (A future "release-pinned" mode can bake a version in.)
 
 ## Security notes (read before shipping past your LAN)
-- v0 sets a **default root password + console autologin** for testing — see
-  [`mkosi.conf`](mkosi.conf). **Change these** before any real deployment.
+- Default console login is **`thrive` / `growth`** (a sudo user; created in
+  [`mkosi.postinst`](mkosi.postinst)); root also has a default password set in
+  [`mkosi.conf`](mkosi.conf). **Change both** before any real deployment.
 - thrive runs over **http** on :9500 (`COOKIE_SECURE=false`). Fine on a trusted
   LAN; put it behind TLS (reverse proxy) for anything exposed.
 
