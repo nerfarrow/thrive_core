@@ -5,6 +5,8 @@ BUILDER := sprout-builder
 # base image for the build-container; override when Docker Hub is unreachable, e.g.
 #   make builder BASE=some-local-debian-trixie:latest
 BASE ?= debian:trixie-slim
+# pi-image variant: user (quiet boot + Thrive splash) or dev (verbose console)
+PROFILE ?= user
 # pass /dev/kvm through when present so QEMU/mkosi build is fast (TCG fallback otherwise)
 KVM := $(shell [ -e /dev/kvm ] && echo "--device /dev/kvm" || echo "")
 RUN := docker run --rm --privileged $(KVM) -v $$PWD:/work -w /work $(BUILDER)
@@ -24,7 +26,7 @@ image: builder          ## produce sprout*.raw
 pi-image: builder       ## produce sprout-pi.raw for Raspberry Pi 5 (arm64 MBR; dd to SD card)
 	# arm64 rootfs cross-built under qemu binfmt, then pi/build.sh assembles the
 	# Pi-bootable MBR disk — the Pi firmware can't read mkosi's GPT/UEFI output
-	docker run --rm --privileged -v $$PWD:/work -w /work/pi --entrypoint /bin/bash $(BUILDER) build.sh
+	docker run --rm --privileged -v $$PWD:/work -w /work/pi -e PROFILE=$(PROFILE) --entrypoint /bin/bash $(BUILDER) build.sh
 
 vm: builder             ## boot the built image in QEMU
 	docker run --rm -it --privileged $(KVM) -v $$PWD:/work -w /work $(BUILDER) vm

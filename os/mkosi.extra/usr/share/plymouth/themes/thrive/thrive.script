@@ -1,0 +1,41 @@
+# Thrive boot splash (Plymouth "script" theme).
+# Centered logo on a dark field, a gentle opacity pulse so it's clearly alive, and
+# a status line that mirrors boot progress (systemd unit status + any message a
+# service pushes via `plymouth display-message`). Replaces the wall of kernel text
+# in the `user` image; the `dev` image keeps the verbose console (no quiet/splash).
+
+# dark background — matches the app's --bg-primary (#0f0f0f)
+Window.SetBackgroundTopColor(0.059, 0.059, 0.059);
+Window.SetBackgroundBottomColor(0.059, 0.059, 0.059);
+
+# logo, scaled to ~40% of screen width, centered
+logo.image = Image("logo.png");
+target_w   = Window.GetWidth() * 0.40;
+scale      = target_w / logo.image.GetWidth();
+logo.image = logo.image.Scale(logo.image.GetWidth() * scale, logo.image.GetHeight() * scale);
+logo.sprite = Sprite(logo.image);
+logo.sprite.SetX(Window.GetWidth()  / 2 - logo.image.GetWidth()  / 2);
+logo.sprite.SetY(Window.GetHeight() / 2 - logo.image.GetHeight() / 2);
+
+# gentle pulse so the screen never looks frozen during the (slow) first boot
+tick = 0;
+fun refresh_callback() {
+    tick++;
+    logo.sprite.SetOpacity(0.65 + 0.35 * Math.Sin(tick / 18));
+}
+Plymouth.SetRefreshFunction(refresh_callback);
+
+# status line below the logo (soft off-white)
+status.sprite = Sprite();
+fun show_message(text) {
+    img = Image.Text(text, 0.78, 0.78, 0.74);
+    status.sprite.SetImage(img);
+    status.sprite.SetX(Window.GetWidth() / 2 - img.GetWidth() / 2);
+    status.sprite.SetY(Window.GetHeight() * 0.74);
+}
+Plymouth.SetUpdateStatusFunction(show_message);   # systemd unit status (e.g. "Starting Docker…")
+Plymouth.SetMessageFunction(show_message);        # `plymouth display-message --text=…` (first-boot phases)
+
+# keep a boot password prompt minimal if anything ever asks
+fun display_password(prompt, bullets) { show_message(prompt); }
+Plymouth.SetDisplayPasswordFunction(display_password);

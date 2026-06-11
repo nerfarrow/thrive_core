@@ -15,6 +15,10 @@ cd "$(dirname "$0")"
 IMG=../sprout-pi.raw
 ROOTFS=./sprout-pi
 BOOT_MB=512
+# PROFILE=user (default) → quiet boot + Thrive plymouth splash; PROFILE=dev → verbose
+# console (kernel/systemd text). Same image either way; only cmdline.txt differs.
+PROFILE="${PROFILE:-user}"
+echo "[pi-build] profile: $PROFILE"
 
 # ── 1. binfmt for arm64 emulation ────────────────────────────────────────────
 # trixie's qemu-user-static ships systemd-binfmt configs (/usr/lib/binfmt.d/*.conf),
@@ -107,9 +111,15 @@ EOF
 
 # loglevel/audit: same console-noise rationale as the amd64 image. serial0 is the
 # Pi's primary debug UART. root by LABEL (set above with mkfs.ext4 -L sprout-root).
-cat > /mnt/sprout/boot/firmware/cmdline.txt <<'EOF'
-console=serial0,115200 console=tty1 root=LABEL=sprout-root rootfstype=ext4 rootwait fsck.repair=yes loglevel=4 audit=0
-EOF
+# cmdline.txt — single line. root by LABEL; init= explicit (the Pi boots /sbin/init by
+# default, we point straight at systemd). dev keeps the verbose console; user goes
+# quiet + splash so plymouth shows the Thrive logo instead of kernel text.
+COMMON="root=LABEL=sprout-root rootfstype=ext4 rootwait fsck.repair=yes audit=0 init=/usr/lib/systemd/systemd"
+if [ "$PROFILE" = dev ]; then
+    echo "console=serial0,115200 console=tty1 $COMMON loglevel=4" > /mnt/sprout/boot/firmware/cmdline.txt
+else
+    echo "console=tty1 console=serial0,115200 $COMMON quiet loglevel=3 splash plymouth.ignore-serial-consoles" > /mnt/sprout/boot/firmware/cmdline.txt
+fi
 
 umount -R /mnt/sprout
 losetup -d "$LOOP1" "$LOOP2"

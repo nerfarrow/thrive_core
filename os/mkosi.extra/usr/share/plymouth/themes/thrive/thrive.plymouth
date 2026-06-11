@@ -1,0 +1,8 @@
+[Plymouth Theme]
+Name=Thrive
+Description=Thrive appliance boot splash — centered logo, gentle pulse, status line
+ModuleName=script
+
+[script]
+ImageDir=/usr/share/plymouth/themes/thrive
+ScriptFile=/usr/share/plymouth/themes/thrive/thrive.script
