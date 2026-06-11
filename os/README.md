@@ -52,8 +52,10 @@ make clean     # remove build artifacts
 ## Design decisions (v0)
 - **Appliance, not distro** — stock Debian base, declaratively assembled. Maintainable.
 - **amd64**, testable in QEMU first (no flashing hardware to iterate).
-- **Headless server** by default — thrive is a household app you reach from your
-  phone/laptop, not a kiosk terminal. (A kiosk-display mode is a future opt-in.)
+- **XFCE desktop** (LightDM login → XFCE, with Firefox) so the box is usable at a
+  monitor — open thrive's own UI locally, or just have a desktop. It's still a server
+  first (thrive runs as a service regardless of who's logged into X); the desktop is a
+  convenience layer. Networking stays on systemd-networkd (no NetworkManager).
 - **thrive pulled at first boot**, not baked in — so the appliance tracks the repo
   without rebuilding the OS image. (A future "release-pinned" mode can bake a version in.)
 

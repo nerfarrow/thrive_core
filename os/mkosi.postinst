@@ -61,3 +61,13 @@ if ! grep -q '^thrive:' "$R/etc/passwd"; then
     chmod 700 "$R/home/thrive"
     echo "[postinst] created default user thrive (sudo)"
 fi
+
+# --- desktop: boot to graphical (LightDM login screen → XFCE) -----------------
+# default.target = graphical so the box comes up in X, not the text console.
+# (The text console + serial getty still exist on the other VTs / ttyS0.)
+ln -sf /usr/lib/systemd/system/graphical.target "$R/etc/systemd/system/default.target"
+# enable LightDM as the display manager: `systemctl enable lightdm` would symlink
+# the display-manager.service alias AND pull it into graphical.target — do both.
+ln -sf /usr/lib/systemd/system/lightdm.service "$R/etc/systemd/system/display-manager.service"
+enable_unit lightdm.service graphical.target
+echo "[postinst] desktop: graphical.target default, lightdm enabled"
