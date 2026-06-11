@@ -5,7 +5,7 @@
 from fastapi import APIRouter, HTTPException, Request, Response
 from pydantic import BaseModel
 from typing import Optional
-import sqlite3, os, hashlib, secrets, hmac
+import sqlite3, os, hashlib, secrets, hmac, json
 from datetime import datetime, timedelta
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -100,6 +100,11 @@ def init_db():
                 expires_at TEXT NOT NULL
             )
         """)
+        # per-user UI preferences (theme, …) — a JSON blob on the account so they
+        # follow the login across devices. Idempotent add for existing DBs.
+        acct_cols = [c["name"] for c in conn.execute("PRAGMA table_info(accounts)").fetchall()]
+        if "prefs" not in acct_cols:
+            conn.execute("ALTER TABLE accounts ADD COLUMN prefs TEXT DEFAULT '{}'")
         conn.commit()
     finally:
         conn.close()
@@ -134,15 +139,19 @@ def _account_payload(row) -> dict:
     if row["profile_id"] is not None:
         profile = {"id": row["profile_id"], "name": row["profile_name"],
                    "avatar": row["profile_avatar"], "color": row["profile_color"]}
+    try:
+        prefs = json.loads(row["prefs"]) if row["prefs"] else {}
+    except Exception:
+        prefs = {}
     return {"id": row["id"], "username": row["username"], "email": row["email"],
-            "role": row["role"], "profile": profile}
+            "role": row["role"], "profile": profile, "prefs": prefs}
 
 def user_from_token(token: Optional[str]) -> Optional[dict]:
     if not token: return None
     conn = get_db()
     try:
         row = conn.execute(
-            """SELECT s.expires_at, a.id, a.username, a.email, a.role, a.disabled,
+            """SELECT s.expires_at, a.id, a.username, a.email, a.role, a.disabled, a.prefs,
                       u.id AS profile_id, u.name AS profile_name,
                       u.avatar AS profile_avatar, u.color AS profile_color
                FROM sessions s JOIN accounts a ON a.id = s.account_id
@@ -242,3 +251,26 @@ def me(request: Request):
     user = current_user_from_request(request)
     if not user: raise HTTPException(status_code=401, detail="Not authenticated")
     return user
+
+@router.patch("/me/prefs")
+def update_my_prefs(body: dict, request: Request):
+    """Self-serve: any logged-in account updates ITS OWN UI prefs (theme, …).
+    Shallow-merges the patch into the stored prefs JSON; a null value drops a key.
+    Distinct from admin-only /accounts/{id}."""
+    user = current_user_from_request(request)
+    if not user: raise HTTPException(status_code=401, detail="Not authenticated")
+    conn = get_db()
+    try:
+        row = conn.execute("SELECT prefs FROM accounts WHERE id=?", (user["id"],)).fetchone()
+        try:
+            prefs = json.loads(row["prefs"]) if row and row["prefs"] else {}
+        except Exception:
+            prefs = {}
+        for k, v in (body or {}).items():
+            if v is None: prefs.pop(k, None)
+            else:         prefs[k] = v
+        conn.execute("UPDATE accounts SET prefs=? WHERE id=?", (json.dumps(prefs), user["id"]))
+        conn.commit()
+        return {"prefs": prefs}
+    finally:
+        conn.close()

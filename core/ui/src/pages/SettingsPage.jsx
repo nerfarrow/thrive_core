@@ -5,6 +5,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { api } from '../api'
+import { THEMES, applyTheme, DEFAULT_THEME } from '../theme'
 import EmojiPicker from '../components/EmojiPicker'
 import { MODULES } from '../moduleRegistry'
 
@@ -131,6 +132,18 @@ function FrontPageSection() {
 const UI_ALPHA_KEY = 'thrive:uiAlpha'
 
 function UISection() {
+  const { user, updatePrefs } = useAuth()
+  const theme = user?.prefs?.theme || DEFAULT_THEME
+  const [savingTheme, setSavingTheme] = useState(false)
+
+  // optimistic: paint the theme instantly, then persist to the account so it
+  // follows the login across devices
+  const changeTheme = async (id) => {
+    applyTheme(id)
+    setSavingTheme(true)
+    try { await updatePrefs({ theme: id }) } catch {} finally { setSavingTheme(false) }
+  }
+
   const [alpha, setAlpha] = useState(() => {
     const v = parseFloat(localStorage.getItem(UI_ALPHA_KEY))
     return isNaN(v) ? 1 : v
@@ -141,8 +154,17 @@ function UISection() {
     try { localStorage.setItem(UI_ALPHA_KEY, String(v)) } catch {}
   }
   return (
-    <div style={body} title="Lower to let the background show through panels & nav.">
-      <div style={{ ...lbl, display: 'flex', justifyContent: 'space-between' }}>
+    <div style={body}>
+      <div style={lbl}>Theme</div>
+      <select style={inp} value={theme} onChange={e => changeTheme(e.target.value)} disabled={!user}>
+        {THEMES.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+      </select>
+      <div style={{ fontSize: 10, color: 'var(--text-tertiary,#666)', marginTop: 6 }}>
+        Saved to your account — follows you on every device.{savingTheme && ' Saving…'}
+      </div>
+
+      <div style={{ ...lbl, display: 'flex', justifyContent: 'space-between', marginTop: 18 }}
+        title="Lower to let the background show through panels & nav.">
         <span>UI opacity</span>
         <b style={{ color: 'var(--text-secondary,#aaa)' }}>{Math.round(alpha * 100)}%</b>
       </div>

@@ -16,6 +16,23 @@
   --font-body:     'DM Sans', sans-serif;
 }
 
+/* ── Themes ──────────────────────────────────────────────────────────────────
+   :root above IS "Thrive Classic" (the default). Each alternate just overrides
+   the colour vars when <html data-theme="…"> is set (see src/theme.js); fonts +
+   --ui-alpha fall through to :root. Add a palette here, register it in theme.js,
+   and it shows up in Settings → UI. */
+:root[data-theme="daybreak"] {
+  --bg-primary:    #efece6;
+  --bg-secondary:  rgba(255, 253, 249, var(--ui-alpha));
+  --bg-tertiary:   rgba(232, 228, 220, var(--ui-alpha));
+  --border-color:  #d8d3c8;
+  --text-primary:  #211f1b;
+  --text-secondary:#5c574e;
+  --text-tertiary: #8a8478;
+  --color-success: #15803d;
+  --color-danger:  #dc2626;
+}
+
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
 /* base colour lives on <html> so a fixed behind-UI canvas (e.g. the Black Hole
