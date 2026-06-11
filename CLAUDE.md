@@ -257,10 +257,13 @@ NOTE: nerfBase has no staging — a rebuild here deploys live to thrive.nerfarro
       monorepo + a catalog manifest (the source the installer pulls from).
 - [ ] **Theming** — swappable look via CSS-var palettes; current look becomes
       "Thrive Classic"; total coverage (charts/accents too). A **live theme dropdown
-      in Settings → UI** (next to opacity), applied instantly — a **per-device**
-      preference (`thrive:theme` in localStorage, exactly like `--ui-alpha`, ambient,
-      nav order), NOT a server-side/per-install global. Purely frontend (no
-      `app_config`). Designed + scoped, not yet built.
+      in Settings → UI** (next to opacity), applied instantly. It's a **per-user**
+      preference that follows your login across devices (NOT per-device, NOT a
+      per-install global): store a `prefs` JSON on the `accounts` table
+      (`{ "theme": … }`), return it in `/auth/me` (so it applies before first paint),
+      and write it via a self-serve `PATCH /auth/me/prefs` (separate from admin-only
+      `/accounts/{id}`). Frontend applies `prefs.theme` to `:root` on auth load.
+      Shared/kiosk profiles (no account) get Thrive Classic. Designed + scoped, not built.
 - [ ] Profile-picker (kiosk) login
 
 **Recently done (2026-06-09):** module-UI build-time discovery + settings-panel
