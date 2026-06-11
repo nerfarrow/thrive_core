@@ -1,0 +1,12 @@
+{
+  "id": "gog",
+  "name": "GOG",
+  "icon": "👾",
+  "description": "Household GOG libraries — DRM-free game collections",
+  "version": "0.1.0",
+  "color": "#9d4edd",
+  "nav_path": "/gog",
+  "core": false,
+  "api_routers": ["api.routers.gog"],
+  "requires": []
+}

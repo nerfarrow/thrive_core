@@ -6,16 +6,8 @@ dist/
 .env
 *.db
 
-# modules: only the bundled `users` and `home` modules ship with thrive.
-# Everything else (vehicles, budget, vault, ...) is installed separately.
-# (home is bundled like users — its React page lives in core ui/ until modules
-#  can ship their own pages.)
-modules/*
-!modules/users/
-!modules/home/
-!modules/vehicles/
-!modules/budget/
-!modules/vault/
-!modules/blackhole/
-!modules/lmstudio/
-!modules/grovekeeper/
+# ALL modules are tracked here — this umbrella monorepo is the source of truth
+# (modules are NOT split into separate repos; see CLAUDE.md "module distribution").
+# New modules under modules/ track automatically; only build/runtime junk is
+# ignored (node_modules, __pycache__, *.pyc, data/, *.db above). The old
+# allowlist silently dropped any module not on it (calendar/gog/steam) — gone.

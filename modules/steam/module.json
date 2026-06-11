@@ -1,0 +1,12 @@
+{
+  "id": "steam",
+  "name": "Steam",
+  "icon": "🎮",
+  "description": "Household Steam libraries — playtime, recently played, who plays what",
+  "version": "0.1.0",
+  "color": "#66c0f4",
+  "nav_path": "/steam",
+  "core": false,
+  "api_routers": ["api.routers.steam"],
+  "requires": []
+}

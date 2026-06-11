@@ -1,0 +1,2 @@
+# calendar module backend deps (installed into the API image at build time)
+httpx>=0.27      # Google Calendar / Microsoft Graph API calls

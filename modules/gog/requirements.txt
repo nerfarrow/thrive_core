@@ -1,0 +1,2 @@
+# gog module backend deps (installed into the API image at build time)
+httpx>=0.27      # GOG auth + embed API calls

@@ -1,0 +1,12 @@
+{
+  "id": "calendar",
+  "name": "Calendar",
+  "icon": "📅",
+  "description": "Household calendar — native events plus two-way Google / Microsoft sync",
+  "version": "0.1.0",
+  "color": "#f97316",
+  "nav_path": "/calendar",
+  "core": false,
+  "api_routers": ["api.routers.calendar"],
+  "requires": []
+}
