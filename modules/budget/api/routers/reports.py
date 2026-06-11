@@ -300,3 +300,49 @@ def cash_flow_projection(months: int = Query(3, ge=1, le=24)):
             "net_cents":     sum(m["net_cents"]     for m in series),
         },
     }
+
+
+@router.get("/scheduled-occurrences")
+def scheduled_occurrences(start: str = Query(...), end: str = Query(...)):
+    """Every scheduled (recurring) transaction expanded into concrete dated
+    occurrences within [start, end] (inclusive, ISO YYYY-MM-DD — datetime strings
+    are accepted and truncated). Read-only feed for other modules to overlay
+    upcoming bills/income, e.g. the calendar. type in income|expense|transfer."""
+    win_from = date.fromisoformat(start[:10])
+    win_to   = date.fromisoformat(end[:10])
+    conn = get_db()
+    try:
+        rows = conn.execute("""
+            SELECT s.id, s.amount_cents, s.frequency, s.day, s.anchor_date,
+                   s.transfer_account_id,
+                   p.name AS payee_name,
+                   a.name AS account_name,
+                   CASE WHEN s.transfer_account_id IS NOT NULL THEN 'Transfer:' || ta.name
+                        WHEN parent.name IS NOT NULL THEN parent.name || ':' || c.name
+                        ELSE c.name END AS category_name
+            FROM scheduled s
+            JOIN payees p ON p.id = s.payee_id
+            LEFT JOIN budget_accounts a      ON a.id = s.account_id
+            LEFT JOIN categories c           ON c.id = s.category_id
+            LEFT JOIN categories parent      ON parent.id = c.parent_id
+            LEFT JOIN budget_accounts ta     ON ta.id = s.transfer_account_id
+        """).fetchall()
+    finally:
+        conn.close()
+
+    out = []
+    for s in rows:
+        cents = s["amount_cents"]
+        kind  = "transfer" if s["transfer_account_id"] is not None else ("income" if cents > 0 else "expense")
+        for d in _occurrences(s["frequency"], s["day"], s["anchor_date"], win_from, win_to):
+            out.append({
+                "scheduled_id": s["id"],
+                "date":         d.isoformat(),
+                "title":        s["payee_name"],
+                "amount_cents": cents,
+                "type":         kind,
+                "category":     s["category_name"],
+                "account":      s["account_name"],
+            })
+    out.sort(key=lambda o: o["date"])
+    return {"start": win_from.isoformat(), "end": win_to.isoformat(), "occurrences": out}
