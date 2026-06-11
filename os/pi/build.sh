@@ -78,6 +78,11 @@ SECT=512
 P1_OFF=$(( 2048 * SECT ))                 # first partition starts at sector 2048 (1 MiB)
 P1_SIZE=$(( BOOT_MB * 1024 * 1024 ))       # FAT32 firmware partition = BOOT_MB
 P2_OFF=$(( P1_OFF + P1_SIZE ))             # ext4 root immediately after
+# ensure loop-device nodes exist: this build container's /dev may not have them
+# (no udev), and `losetup -f` can pick a free NUMBER whose /dev node is missing →
+# "failed to set up loop device ... device node /dev/loopN is lost". Pre-create a
+# generous range (privileged container, so mknod works).
+for i in $(seq 0 63); do [ -e "/dev/loop$i" ] || mknod "/dev/loop$i" b 7 "$i" 2>/dev/null || true; done
 LOOP1=$(losetup --show -f --offset "$P1_OFF" --sizelimit "$P1_SIZE" "$IMG")
 LOOP2=$(losetup --show -f --offset "$P2_OFF" "$IMG")
 trap 'umount -R /mnt/sprout 2>/dev/null || true; losetup -d "$LOOP1" "$LOOP2" 2>/dev/null || true' EXIT
