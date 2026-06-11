@@ -26,6 +26,9 @@ enable_unit docker.service     # container engine
 enable_unit ssh.service        # remote admin
 enable_unit thrive.service     # the appliance: pulls the thrive repo + runs core/
 enable_unit sprout-grow.service  # grow root to fill the SD card on first boot (MBR-safe)
+enable_unit sprout-kiosk.service # Pi-on-a-TV -> fullscreen thrive UI. Self-gates on the
+                                 # `splash` cmdline (ConditionKernelCommandLine), so it only
+                                 # actually runs in the `user` image; harmless in `dev`.
 
 # networking: systemd-networkd wired DHCP + resolved (shared 20-dhcp.network overlay)
 enable_unit systemd-networkd.service

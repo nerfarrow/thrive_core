@@ -1,0 +1,16 @@
+#!/bin/sh
+# Chromium fullscreen kiosk pointed at the local thrive UI. Runs inside cage
+# (Wayland), launched by sprout-kiosk.service. --app gives a chromeless window;
+# --kiosk locks it fullscreen.
+URL=http://localhost:9500
+exec chromium \
+    --kiosk --app="$URL" \
+    --ozone-platform=wayland \
+    --no-first-run --fast --fast-start \
+    --noerrdialogs --disable-infobars \
+    --disable-session-crashed-bubble \
+    --disable-features=Translate \
+    --password-store=basic \
+    --check-for-update-interval=31536000 \
+    --overscroll-history-navigation=0 \
+    --user-data-dir="$HOME/.config/sprout-kiosk"
