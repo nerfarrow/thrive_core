@@ -39,7 +39,9 @@ just the disk assembly.
 
 ## Flash & boot
 ```bash
-sudo ../os/write-usb.sh /dev/sdX   # or: sudo dd if=sprout-pi.raw of=/dev/sdX bs=4M conv=fsync status=progress
+# from os/ — dd the Pi image to the SD card / USB SSD (NOT write-usb.sh; that's the
+# amd64 stick flasher and its size/USB guards reject SD cards)
+sudo dd if=sprout-pi.raw of=/dev/sdX bs=4M conv=fsync status=progress && sync
 ```
 Boot the Pi 5 with wired ethernet. First boot: grows root to fill the card, clones
 thrive into `/opt/thrive`, builds + starts the stack → `http://<pi-ip>:9500`.
