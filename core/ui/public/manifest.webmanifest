@@ -1,0 +1,14 @@
+{
+  "name": "thrive",
+  "short_name": "thrive",
+  "description": "Self-hosted personal platform",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0B140E",
+  "theme_color": "#16523C",
+  "icons": [
+    { "src": "/brand/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/brand/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/brand/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
