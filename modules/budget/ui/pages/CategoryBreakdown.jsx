@@ -9,9 +9,11 @@ import SankeyView from "./SankeyView";
 const API = "/reports/category-breakdown";
 
 // ── colour palette ──────────────────────────────────────────────────────────
+// themeable categorical palette (CSS vars from core; wraps past 8). Applied via
+// `style` (not the fill= attribute) so the var() actually resolves in SVG.
 const PALETTE = [
-  "#3b82f6","#22c55e","#f59e0b","#ef4444","#a855f7",
-  "#14b8a6","#ec4899","#f97316","#84cc16","#94a3b8",
+  "var(--chart-1)","var(--chart-2)","var(--chart-3)","var(--chart-4)",
+  "var(--chart-5)","var(--chart-6)","var(--chart-7)","var(--chart-8)",
 ];
 const color  = (i) => PALETTE[i % PALETTE.length];
 const fmtUSD = (cents) =>
@@ -171,10 +173,10 @@ function DonutChart({ categories, totalCents, title, sign = -1, rangeQS = "" }) 
         {slices.map(s => {
           const dim = hovOnChart ? hov.key !== s.key : (subSel ? !s.selected : false);
           return (
-            <path key={s.key} d={s.path} fill={s.color} fillOpacity={s.fillOpacity}
+            <path key={s.key} d={s.path} fillOpacity={s.fillOpacity}
               stroke={s.selected ? "var(--text-primary,#e8e6e0)" : "var(--bg-primary,#0f0f0f)"}
               strokeWidth={s.selected ? 2.5 : 1.5}
-              style={{ cursor: s.onClick ? "pointer" : "default", transition: "opacity 0.15s" }}
+              style={{ fill: s.color, cursor: s.onClick ? "pointer" : "default", transition: "opacity 0.15s" }}
               opacity={dim ? 0.4 : 1}
               onMouseEnter={() => setHov({ key: s.key, name: s.name, total_cents: s.total_cents, pct: fmtPct(s.total_cents, grandTotal) })}
               onMouseLeave={() => setHov(null)}

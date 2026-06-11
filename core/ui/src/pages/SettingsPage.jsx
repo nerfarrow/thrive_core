@@ -18,13 +18,13 @@ const inp  = { fontFamily: 'monospace', fontSize: 13, background: 'var(--bg-tert
 const lbl  = { fontSize: 10, color: 'var(--text-tertiary,#666)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.1em' }
 
 function Badge({ kind }) {
-  const map = { admin: { bg: 'rgba(168,85,247,0.14)', c: '#a855f7' }, member: { bg: 'rgba(59,130,246,0.12)', c: '#3b82f6' }, disabled: { bg: 'rgba(239,68,68,0.12)', c: '#ef4444' } }
+  const map = { admin: { bg: 'var(--accent-muted)', c: 'var(--accent)' }, member: { bg: 'var(--info-muted)', c: 'var(--color-info)' }, disabled: { bg: 'var(--danger-muted)', c: 'var(--color-danger)' } }
   const s = map[kind] || map.member
   return <span style={{ fontSize: 9, padding: '2px 8px', borderRadius: 4, background: s.bg, color: s.c, fontFamily: 'monospace', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{kind}</span>
 }
 
 // iOS-style toggle switch + a small labelled wrapper
-function Switch({ on, onChange, disabled, color = '#22c55e' }) {
+function Switch({ on, onChange, disabled, color = 'var(--color-success)' }) {
   return (
     <button role="switch" aria-checked={on} disabled={disabled} onClick={() => onChange(!on)}
       style={{ width: 34, height: 20, borderRadius: 999, border: 'none', padding: 0, flexShrink: 0,
@@ -170,7 +170,7 @@ function UISection() {
       </div>
       <input type="range" min="0.3" max="1" step="0.01" value={alpha}
         title="Lower to let the background show through panels & nav."
-        onChange={e => apply(parseFloat(e.target.value))} style={{ width: '100%', accentColor: '#8b5cf6' }} />
+        onChange={e => apply(parseFloat(e.target.value))} style={{ width: '100%', accentColor: 'var(--accent)' }} />
     </div>
   )
 }
@@ -239,7 +239,7 @@ function ModulesSection() {
           <SwitchField label="On" on={m.enabled} disabled={saving === m.id}
             onChange={() => toggle(m)} color="var(--color-success,#22c55e)" />
           <SwitchField label="Installed" on={true} disabled={saving === m.id}
-            onChange={() => uninstall(m)} color="#6366f1" />
+            onChange={() => uninstall(m)} color="var(--accent)" />
         </ModuleRow>
       ))}
 
@@ -247,7 +247,7 @@ function ModulesSection() {
       {available.map((m, i) => (
         <ModuleRow key={m.id} m={m} i={i} saving={saving} editable={isAdmin} onIcon={setIcon} onColor={setColor}>
           <SwitchField label="Install" on={false} disabled={saving === m.id}
-            onChange={() => install(m)} color="#6366f1" />
+            onChange={() => install(m)} color="var(--accent)" />
         </ModuleRow>
       ))}
 
