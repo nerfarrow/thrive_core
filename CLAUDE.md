@@ -256,8 +256,11 @@ NOTE: nerfBase has no staging — a rebuild here deploys live to thrive.nerfarro
 - [ ] **Per-module tarball packaging** — CI builds a tarball per module from this
       monorepo + a catalog manifest (the source the installer pulls from).
 - [ ] **Theming** — swappable look via CSS-var palettes; current look becomes
-      "Thrive Classic"; total coverage (charts/accents too); one global default via
-      `/settings`. Designed + scoped, not yet built.
+      "Thrive Classic"; total coverage (charts/accents too). A **live theme dropdown
+      in Settings → UI** (next to opacity), applied instantly — a **per-device**
+      preference (`thrive:theme` in localStorage, exactly like `--ui-alpha`, ambient,
+      nav order), NOT a server-side/per-install global. Purely frontend (no
+      `app_config`). Designed + scoped, not yet built.
 - [ ] Profile-picker (kiosk) login
 
 **Recently done (2026-06-09):** module-UI build-time discovery + settings-panel
