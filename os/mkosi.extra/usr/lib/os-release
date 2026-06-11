@@ -1,0 +1,16 @@
+# Sprout — the thrive appliance distro (a Debian trixie derivative). Overrides
+# base-files' Debian os-release so the box identifies as Sprout everywhere that
+# reads os-release (login banner via \S, `hostnamectl`, motd, etc). ID_LIKE=debian
+# + VERSION_CODENAME=trixie are kept so anything doing debian-compat checks still
+# works. /etc/os-release is a symlink to this file, so both paths resolve here.
+NAME="Sprout"
+PRETTY_NAME="Sprout 1.0"
+ID=sprout
+ID_LIKE=debian
+VERSION="1.0"
+VERSION_ID="1.0"
+VERSION_CODENAME=trixie
+HOME_URL="https://github.com/nerfarrow/thrive"
+SUPPORT_URL="https://github.com/nerfarrow/thrive"
+BUG_REPORT_URL="https://github.com/nerfarrow/thrive/issues"
+ANSI_COLOR="0;32"

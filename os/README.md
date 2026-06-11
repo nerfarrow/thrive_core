@@ -1,10 +1,15 @@
-# thriveOS
+# thriveOS — builds **Sprout** 🌱
 
-A self-hosted **appliance OS** whose entire purpose is to run
+**Sprout** is a self-hosted **appliance distro** whose entire purpose is to run
 [thrive](https://github.com/nerfarrow/thrive) — specifically the platform shell in
 its [`core/`](../core/) directory. Boot a machine on it and it comes up as a thrive
 server on your LAN — Docker, thrive's `core/` stack, and its modules, with nothing
 else in the way.
+
+> **Names:** *thriveOS* is this build project (the `os/` dir); **Sprout** is the
+> bootable distro it produces (`sprout.raw`). The app it runs is **thrive**. Sprout
+> ships as a tiny ~1.6 GB seed image that **grows to fill its disk on first boot** —
+> hence the name. It's a Debian trixie derivative (`ID=sprout`, `ID_LIKE=debian`).
 
 > **v0 scope:** a reproducible **amd64 appliance image** (minimal Debian + Docker +
 > thrive's `core/` stack, brought up on first boot). It is *not* a from-scratch distro
@@ -23,8 +28,8 @@ else in the way.
  [ Debian trixie minimal ]
         + Docker + compose
         + thrive.service / thrive-bootstrap
-        =  thriveos.raw   →  flash to disk / boot as VM
-                              boot → thrive (core/) on :9500
+        =  sprout.raw     →  flash to disk / boot as VM
+                              boot → grow → thrive (core/) on :9500
 ```
 
 ## Build & test — no host tooling required
@@ -34,7 +39,7 @@ so the host needs only Docker. Nothing is installed on the host; the build emits
 
 ```bash
 make builder   # build the build-container (debian + mkosi + qemu)
-make image     # produce thriveos*.raw  (privileged container; needs KVM for speed)
+make image     # produce sprout*.raw  (privileged container; needs KVM for speed)
 make vm        # boot the freshly built image in QEMU to test
 make clean     # remove build artifacts
 ```
@@ -60,12 +65,12 @@ make clean     # remove build artifacts
 
 ## Status
 - [x] Repo + containerized build pipeline scaffolded
-- [x] `make image` produces a bootable `thriveos.raw` (1.7G, UEFI ESP)
-- [x] Boots in QEMU to Debian userspace — hostname `thriveos`, root autologin
-- [x] docker / ssh / thrive services enabled in the image (verified at build time)
-- [ ] thrive live on :9500 — needs a boot on a real network (guest must reach
-      GitHub + Docker Hub to clone the thrive repo and pull its images). Not verifiable
-      in a network-restricted build sandbox; the machinery is in place and assembled.
-- [ ] Flash/boot on real amd64 hardware
+- [x] `make image` produces a bootable `sprout.raw` (~1.6G, UEFI ESP)
+- [x] Boots to Debian userspace — hostname `sprout`, root autologin
+- [x] docker / ssh / thrive services enabled in the image
+- [x] grow-on-boot: root grows to fill the disk (systemd-repart + growfs)
+- [x] **thrive live on :9500** — verified end-to-end on a real LAN
+- [x] **Flash + boot on real amd64 hardware** — USB → UEFI boot → autologin →
+      first-boot clone+build → thrive serving on the network (2026-06-11)
 - [ ] Optional kiosk-display mode
 - [ ] Release-pinned thrive mode (bake a thrive version in vs. pull-on-boot)
