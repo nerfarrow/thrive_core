@@ -751,7 +751,7 @@ export default function MPGPage({ showToast, showConfirm }) {
 
         <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 8, marginBottom: 20 }}>
           {[
-            { label: "Last MPG", value: stats.last_mpg ? <>{fmt(stats.last_mpg)}{trend != null && <span style={{ fontSize: 10, marginLeft: 6, padding: "2px 6px", borderRadius: 4, background: trend >= 0 ? "rgba(34,197,94,0.12)" : "rgba(239,68,68,0.12)", color: trend >= 0 ? "var(--color-success,#22c55e)" : "var(--color-danger,#ef4444)" }}>{trend >= 0 ? "▲" : "▼"} {Math.abs(trend).toFixed(1)}</span>}</> : "—" },
+            { label: "Last MPG", value: stats.last_mpg ? <>{fmt(stats.last_mpg)}{trend != null && <span style={{ fontSize: 10, marginLeft: 6, padding: "2px 6px", borderRadius: 4, background: trend >= 0 ? "var(--success-muted)" : "var(--danger-muted)", color: trend >= 0 ? "var(--color-success)" : "var(--color-danger)" }}>{trend >= 0 ? "▲" : "▼"} {Math.abs(trend).toFixed(1)}</span>}</> : "—" },
             { label: "Avg MPG",       value: fmt(stats.avg_mpg)           },
             { label: "Total gallons", value: fmt(stats.total_gal)         },
             { label: "Total spent",   value: fmtDollar(stats.total_spent, 0) },
@@ -791,7 +791,7 @@ export default function MPGPage({ showToast, showConfirm }) {
                   <div style={{ marginBottom: 14 }}>
                     <label style={{ ...labelStyle, display: "block", marginBottom: 4 }}>
                       Vision model {modelHost && <span style={{ opacity: 0.6 }}>· {modelHost}</span>}
-                      {modelLoading && <span style={{ opacity: 0.8, marginLeft: 6, color: "#f59e0b" }}>· loading…</span>}
+                      {modelLoading && <span style={{ opacity: 0.8, marginLeft: 6, color: "var(--color-warning)" }}>· loading…</span>}
                     </label>
                     <select value={activeModel} onChange={e => selectModel(e.target.value)} disabled={modelLoading} style={{ ...inputStyle, fontSize: 12, opacity: modelLoading ? 0.6 : 1 }}>
                       <option value="">— pick a model —</option>
@@ -864,9 +864,9 @@ export default function MPGPage({ showToast, showConfirm }) {
                               title={st.street ? `${st.street} · ${st.dist_m} m away` : `${st.dist_m} m away`}
                               style={{
                                 fontSize: 11, fontFamily: "var(--font-body)", padding: "4px 10px", borderRadius: 14, cursor: "pointer",
-                                border: `1px solid ${active ? "var(--color-success,#22c55e)" : "var(--border-color,#333)"}`,
-                                background: active ? "rgba(34,197,94,0.12)" : "var(--bg-tertiary,#222)",
-                                color: active ? "var(--color-success,#22c55e)" : "var(--text-secondary,#aaa)",
+                                border: `1px solid ${active ? "var(--color-success)" : "var(--border-color,#333)"}`,
+                                background: active ? "var(--success-muted)" : "var(--bg-tertiary,#222)",
+                                color: active ? "var(--color-success)" : "var(--text-secondary,#aaa)",
                               }}>
                               {st.name}
                               <span style={{ opacity: 0.6, marginLeft: 5, fontSize: 9 }}>{st.dist_m < 1000 ? `${st.dist_m}m` : `${(st.dist_m / 1000).toFixed(1)}km`}</span>

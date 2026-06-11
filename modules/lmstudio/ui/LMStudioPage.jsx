@@ -430,7 +430,7 @@ export default function LMStudioPage() {
                       title={busy[m.id] ? 'Working…' : loaded ? 'Unload from host' : 'Load on host'}
                       style={{ justifySelf: 'center', width: 24, height: 24, padding: 0, lineHeight: 1, borderRadius: 6,
                         fontSize: 11, fontFamily: 'monospace', cursor: (!online || busy[m.id]) ? 'default' : 'pointer',
-                        background: loaded ? 'rgba(34,197,94,0.12)' : cfgOpen ? `${ACCENT}22` : 'var(--bg-tertiary,#222)',
+                        background: loaded ? 'var(--success-muted)' : cfgOpen ? `${ACCENT}22` : 'var(--bg-tertiary,#222)',
                         border: `1px solid ${loaded ? 'rgba(34,197,94,0.45)' : cfgOpen ? ACCENT : 'var(--border-color,#333)'}`,
                         color: loaded ? 'var(--color-success,#22c55e)' : cfgOpen ? ACCENT : 'var(--text-secondary,#aaa)',
                         opacity: (!online || busy[m.id]) ? 0.5 : 1 }}>
@@ -527,7 +527,7 @@ export default function LMStudioPage() {
           <div>
             <label style={lbl}>Model {visModel && <span style={{ opacity: 0.6 }}>· default {visModel}</span>}</label>
             {visionModels.length === 0 ? (
-              <div style={{ fontSize: 11, color: '#f59e0b' }}>No vision models on the host — load a VLM in LM Studio.</div>
+              <div style={{ fontSize: 11, color: 'var(--color-warning)' }}>No vision models on the host — load a VLM in LM Studio.</div>
             ) : (
               <select value={testModel} onChange={e => setTestModel(e.target.value)} style={{ ...inp, fontSize: 12 }}>
                 <option value="">— use default —</option>

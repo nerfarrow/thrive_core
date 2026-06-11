@@ -107,7 +107,7 @@ export default function CalendarPanel() {
             <span style={{ fontSize: 12, fontWeight: 500, width: 80 }}>{p.name}</span>
             {cfg[p.idKey] && cfg[p.secretKey]
               ? <>
-                  <span style={{ fontSize: 9, padding: '2px 7px', borderRadius: 4, background: 'rgba(34,197,94,0.12)', color: '#22c55e', fontFamily: 'monospace', textTransform: 'uppercase' }}>configured</span>
+                  <span style={{ fontSize: 9, padding: '2px 7px', borderRadius: 4, background: 'var(--success-muted)', color: 'var(--color-success)', fontFamily: 'monospace', textTransform: 'uppercase' }}>configured</span>
                   <button style={{ ...btnS, borderColor: ACCENT, color: ACCENT }} onClick={() => connect(p.id)}>Connect account ↗</button>
                 </>
               : <span style={{ fontSize: 10, color: 'var(--text-tertiary,#888)' }}>not configured</span>}

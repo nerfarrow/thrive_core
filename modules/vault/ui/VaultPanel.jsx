@@ -72,7 +72,7 @@ export default function VaultPanel() {
       {connected ? (
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
           <span style={{ fontSize: 13, color: 'var(--text-secondary,#aaa)' }}>
-            <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 4, background: 'rgba(34,197,94,0.12)', color: '#22c55e', fontFamily: 'monospace', textTransform: 'uppercase', letterSpacing: '0.06em', marginRight: 10 }}>Connected</span>
+            <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 4, background: 'var(--success-muted)', color: 'var(--color-success)', fontFamily: 'monospace', textTransform: 'uppercase', letterSpacing: '0.06em', marginRight: 10 }}>Connected</span>
             Vault session active. Manage items at /vault.
           </span>
           <button style={btnSecondary} onClick={() => setVaultToken(null)}>Disconnect</button>

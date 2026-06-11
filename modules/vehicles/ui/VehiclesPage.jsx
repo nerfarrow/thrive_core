@@ -23,9 +23,9 @@ const sectionHead = { padding: "10px 16px", borderBottom: "1px solid var(--borde
 
 function Badge({ status, text }) {
   const colors = {
-    overdue: { bg: "rgba(239,68,68,0.12)", color: "var(--color-danger,#ef4444)" },
-    soon:    { bg: "rgba(245,158,11,0.12)", color: "#f59e0b" },
-    ok:      { bg: "rgba(34,197,94,0.12)",  color: "var(--color-success,#22c55e)" },
+    overdue: { bg: "var(--danger-muted)",  color: "var(--color-danger)" },
+    soon:    { bg: "var(--warning-muted)", color: "var(--color-warning)" },
+    ok:      { bg: "var(--success-muted)", color: "var(--color-success)" },
   };
   const c = colors[status] || colors.ok;
   return (
