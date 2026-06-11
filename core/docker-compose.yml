@@ -44,34 +44,18 @@ services:
     restart: unless-stopped
     ports:
       - "9500:80"
+    # NOTE: no `depends_on: vault` — vault is an OPT-IN module that ships its own
+    # container (modules/vault/compose.yml), so core must start without it. nginx
+    # tolerates a missing thrive_vault (runtime resolver — see core/ui/nginx.conf).
     depends_on:
       - api
-      - vault
     networks:
       - internal
 
-  # vault module: self-hosted Vaultwarden (Bitwarden-compatible). Reached only
-  # through nginx at /vault/ (not exposed directly). DOMAIN must match how you
-  # actually reach the app, e.g. http://<nerfBase-ip>:9500/vault.
-  vault:
-    image: vaultwarden/server:latest
-    container_name: thrive_vault
-    restart: unless-stopped
-    volumes:
-      - ./data/vault:/data
-    environment:
-      # public URL via Cloudflare Tunnel. HTTPS is REQUIRED for the vault (Web
-      # Crypto needs a secure context). nerfBase already runs cloudflared, so no
-      # connector here — just add a public hostname on the existing tunnel:
-      #   thrive.nerfarrow.com → http://localhost:9500  (the host-published UI port)
-      # Must match the public URL you serve the app at.
-      - DOMAIN=https://thrive.nerfarrow.com/vault
-      - ROCKET_PORT=8222
-      - WEB_VAULT_ENABLED=true
-      - SIGNUPS_ALLOWED=false  # locked down after accounts created; flip to true briefly to add people
-    networks:
-      - internal
-
+# vault's Vaultwarden container used to live here; it moved to
+# modules/vault/compose.yml so it runs ONLY when the vault module is installed.
+# Bring up the full stack (core + every present module's containers) with
+# core/thrive-compose.sh, which merges each modules/*/compose.yml.
 networks:
   internal:
     driver: bridge

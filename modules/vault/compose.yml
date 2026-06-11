@@ -1,0 +1,34 @@
+# vault module's own backing service — Vaultwarden (Bitwarden-compatible).
+#
+# This is the "a module can ship a container" convention: a module may include a
+# compose.yml, and the launcher (core/thrive-compose.sh, and thrive.service on the
+# appliance) MERGES every modules/*/compose.yml that exists into the core stack.
+# So vaultwarden runs ONLY when the vault module is present in modules/ —
+# "physically there = installed". No vault module dir → no container, and core's
+# compose + nginx tolerate its absence. This is what gets vault OUT of core.
+#
+# Reached only through nginx at /vault/ (never exposed directly). Vaultwarden needs
+# HTTPS for the Web-Crypto web vault UI: set VAULT_DOMAIN to the public https URL
+# you serve the app at (e.g. https://thrive.example.com/vault). The default local
+# http URL is fine for the API but the browser vault UI needs a secure context.
+name: thrive
+services:
+  vault:
+    image: vaultwarden/server:latest
+    container_name: thrive_vault
+    restart: unless-stopped
+    volumes:
+      # relative to the project dir (= core/, the first -f file's dir), matching
+      # where core's api keeps its data — core/data/vault
+      - ./data/vault:/data
+    environment:
+      - DOMAIN=${VAULT_DOMAIN:-http://localhost:9500/vault}
+      - ROCKET_PORT=8222
+      - WEB_VAULT_ENABLED=true
+      - SIGNUPS_ALLOWED=${VAULT_SIGNUPS:-false}
+    networks:
+      - internal
+
+networks:
+  internal:
+    driver: bridge

@@ -116,7 +116,9 @@ thrive/                         (git: nerfarrow/thrive)
 - Custom in-app events/localStorage keys are namespaced `thrive:*`
 
 ### Deploy
-- Docker Compose, port 9500, project name `thrive` (containers `thrive_api/ui/vault`)
+- Docker Compose, port 9500, project name `thrive`. Core = `thrive_api` + `thrive_ui`
+  only; module containers (e.g. `thrive_vault`) attach via `modules/*/compose.yml`
+  (see `core/thrive-compose.sh` + Module anatomy). Launch the full stack with that wrapper.
 - UI container: nginx serving the Vite build, proxies `/api/` to `thrive_api:8000`
 - **Both `ui` and `api` build with `context: ..` (repo root)** so the build can see
   `modules/` (UI glob; API per-module deps). UI Dockerfile mirrors the repo layout
@@ -178,6 +180,13 @@ shows a 🔒). No module is currently core.
   (`settings = { title, Panel, defaultOpen?, padded? }`), co-locating the module's
   own `pages/ components/ utils/` + CSS; all import core via the `@core` alias
 - `requirements.txt` — the module's backend Python deps (baked into the API image)
+- `compose.yml` *(optional)* — a module may ship its **own sidecar container(s)**.
+  `core/thrive-compose.sh` merges every `modules/*/compose.yml` that's present into
+  the core stack, so a module's services run iff the module is physically in
+  `modules/` ("there = installed"). Core never names a module's container. Join the
+  shared `internal` network; resolve relative paths against `core/` (the project
+  dir). Example: **vault** ships `modules/vault/compose.yml` (Vaultwarden) — core's
+  compose + nginx tolerate its absence (nginx uses a runtime resolver for `/vault/`).
 
 **Cross-module ties feature-detect, never hard-`requires`.** e.g. vehicles/MPG uses
 the lmstudio module's `/lmstudio/vision` when present and falls back to manual entry
@@ -221,14 +230,22 @@ lives in **core**; the **users module** owns only profiles.
 ## Running locally
 ```bash
 cd ~/thrive/core
-docker compose up -d --build   # full rebuild (needed for UI changes / new modules / new deps)
-docker compose restart api     # restart API only — enough for a ROUTER code edit
-docker compose logs api        # check module discovery output
+./thrive-compose.sh up -d --build   # full stack: core + any module that ships a compose.yml
+./thrive-compose.sh restart api     # restart API only — enough for a ROUTER code edit
+./thrive-compose.sh logs api        # check module discovery output
 ```
-Add a module: drop it in `~/thrive/modules/<name>/` then `docker compose up -d --build`
-(its UI is build-time discovered and its deps are baked — a bare `restart api` won't
-pick those up). Access at http://<nerfBase-ip>:9500. NOTE: nerfBase has no staging —
-a rebuild here deploys live to thrive.nerfarrow.com.
+`thrive-compose.sh` = `docker compose` with core's file + every `modules/*/compose.yml`
+merged in (that's how vault's Vaultwarden container attaches). Plain
+`docker compose up` still works but runs **core only** (no module containers). Use a
+full rebuild for UI changes / new modules / new deps; a bare `restart api` is enough
+for a router code edit.
+
+Add a module: drop it in `~/thrive/modules/<name>/` then `./thrive-compose.sh up -d --build`
+(its UI is build-time discovered, deps baked, and any `compose.yml` it ships is merged
+in — a bare `restart api` won't pick those up). Access at http://<nerfBase-ip>:9500.
+NOTE: nerfBase has no staging — a rebuild here deploys live to thrive.nerfarrow.com.
+⚠️ Since vault moved out of core, deploy nerfBase with `./thrive-compose.sh up -d`
+(plain `docker compose up` would stop Vaultwarden and break the live vault).
 
 ## What's next
 - [ ] **Installer / catalog** — UI to install modules from a catalog. Needs a
