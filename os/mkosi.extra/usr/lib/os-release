@@ -4,9 +4,11 @@
 # + VERSION_CODENAME=trixie are kept so anything doing debian-compat checks still
 # works. /etc/os-release is a symlink to this file, so both paths resolve here.
 NAME="Sprout"
-PRETTY_NAME="Sprout 1.0"
+PRETTY_NAME="Sprout 1.0 (thriveOS)"
 ID=sprout
 ID_LIKE=debian
+VARIANT="thriveOS"
+VARIANT_ID=thriveos
 VERSION="1.0"
 VERSION_ID="1.0"
 VERSION_CODENAME=trixie
