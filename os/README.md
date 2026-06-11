@@ -44,6 +44,14 @@ make vm        # boot the freshly built image in QEMU to test
 make clean     # remove build artifacts
 ```
 
+**Flash to a USB stick** (gives the stick meaningful labels — shows up as `Sprout`,
+not mkosi's default `root-x86-64`):
+```bash
+sudo ./write-usb.sh /dev/sdX           # refuses non-removable/non-USB; retype to confirm
+sudo FORCE=1 ./write-usb.sh /dev/sdX   # skip the confirm prompt (scripted)
+```
+Then boot the target in **UEFI mode, Secure Boot off**.
+
 > ⚠️ **First build is a bring-up pass, not guaranteed one-shot.** OS image tooling is
 > fussy: exact `mkosi` verb names, Debian package names (e.g. the compose plugin), and
 > bootloader specifics vary by version. Expect to iterate `make image` a couple times.
